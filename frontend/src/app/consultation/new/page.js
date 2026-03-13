@@ -20,6 +20,7 @@ export default function NewConsultationPage() {
   const [timer, setTimer] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
+  const [editableJson, setEditableJson] = useState('');
   const mediaRecorder = useRef(null);
   const timerRef = useRef(null);
   const chunks = useRef([]);
@@ -77,13 +78,15 @@ export default function NewConsultationPage() {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('patientPid', selectedPatient.pid);
-      const { data } = await api.post('/consultations/audio', formData, {
+      const { data } = await api.post('/consultations/audio/draft', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120000,
       });
       setResult(data);
+      // Initialize the editable JSON string with the AI's summary
+      setEditableJson(JSON.stringify(data.aiSummary, null, 2));
       setStep(3);
-      toast.success('Consultation processed successfully!');
+      toast.success('AI Draft generated successfully!');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Processing failed');
     } finally {
@@ -95,15 +98,44 @@ export default function NewConsultationPage() {
     if (!textInput.trim()) return toast.error('Please enter consultation text');
     setProcessing(true);
     try {
-      const { data } = await api.post('/consultations/text', {
+      const { data } = await api.post('/consultations/text/draft', {
         patientPid: selectedPatient.pid,
         text: textInput,
       }, { timeout: 120000 });
       setResult(data);
+      setEditableJson(JSON.stringify(data.aiSummary, null, 2));
       setStep(3);
-      toast.success('Consultation processed successfully!');
+      toast.success('AI Draft generated successfully!');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Processing failed');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const saveFinalConsultation = async () => {
+    setProcessing(true);
+    try {
+      // Parse the doctor's edited JSON
+      const finalSummary = JSON.parse(editableJson);
+      
+      const payload = {
+        patientPid: result.patientPid,
+        audioUrl: result.audioUrl,
+        transcript: result.transcript,
+        detectedLanguage: result.detectedLanguage,
+        aiSummary: finalSummary,
+      };
+
+      const { data } = await api.post('/consultations/save', payload);
+      toast.success('Consultation saved permanently!');
+      router.push(`/patients/${data.patientPid}`);
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        toast.error('Invalid JSON format. Please check your edits.');
+      } else {
+        toast.error(err.response?.data?.error || 'Failed to save consultation');
+      }
     } finally {
       setProcessing(false);
     }
@@ -121,12 +153,12 @@ export default function NewConsultationPage() {
       </div>
 
       {/* Progress Steps */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', alignItems: 'center' }}>
-        {['Select Patient', 'Record / Type', 'Review Results'].map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', alignItems: 'center', overflowX: 'auto', paddingBottom: '8px' }}>
+        {['Select Patient', 'Capture Data', 'Review & Save'].map((s, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
             <div style={{
               width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.8rem', fontWeight: 700,
+              fontSize: '0.8rem', fontWeight: 700, flexShrink: 0,
               background: step > i + 1 ? 'var(--accent-success)' : step === i + 1 ? 'var(--gradient-primary)' : 'var(--bg-glass)',
               color: step >= i + 1 ? 'white' : 'var(--text-muted)',
             }}>
@@ -189,11 +221,11 @@ export default function NewConsultationPage() {
 
           {/* Mode Toggle */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-            <button className={`btn ${mode === 'voice' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('voice')}>
-              <FiMic /> Voice Recording
+            <button className={`btn ${mode === 'voice' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('voice')} style={{ flex: 1, justifyContent: 'center' }}>
+              <FiMic /> Voice
             </button>
-            <button className={`btn ${mode === 'text' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('text')}>
-              <FiMessageSquare /> Text Input
+            <button className={`btn ${mode === 'text' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('text')} style={{ flex: 1, justifyContent: 'center' }}>
+              <FiMessageSquare /> Text
             </button>
           </div>
 
@@ -201,7 +233,7 @@ export default function NewConsultationPage() {
             <div className="glass-card" style={{ padding: '40px' }}>
               <div className="recorder-container">
                 <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
-                  {recording ? 'Recording... Speak clearly into the microphone' : audioBlob ? 'Recording captured! Click Process to analyze.' : 'Click the microphone to start recording the consultation'}
+                  {recording ? 'Recording... Speak clearly into the microphone' : audioBlob ? 'Recording captured! Click Generate Draft.' : 'Click the microphone to start recording'}
                 </p>
 
                 {recording && (
@@ -220,11 +252,11 @@ export default function NewConsultationPage() {
                 </button>
 
                 {audioBlob && !recording && (
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                    <button className="btn btn-secondary" onClick={() => { setAudioBlob(null); setTimer(0); }}>Re-record</button>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
                     <button className="btn btn-primary" onClick={submitAudio} disabled={processing}>
-                      {processing ? <><span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> Processing...</> : <><FiSend /> Process with AI</>}
+                      {processing ? <><span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> Generating AI Draft...</> : <><FiSend /> Generate AI Draft</>}
                     </button>
+                    <button className="btn btn-secondary" onClick={() => { setAudioBlob(null); setTimer(0); }}>Discard & Re-record</button>
                   </div>
                 )}
               </div>
@@ -236,98 +268,60 @@ export default function NewConsultationPage() {
               <div className="form-group">
                 <label className="form-label">Enter consultation notes (any language)</label>
                 <textarea className="form-textarea" rows={6}
-                  placeholder="Type or paste the consultation conversation here... You can use Hindi, Tamil, Telugu, or any Indian language."
+                  placeholder="Type or paste the consultation conversation here..."
                   value={textInput} onChange={(e) => setTextInput(e.target.value)} />
               </div>
-              <button className="btn btn-primary" onClick={submitText} disabled={processing || !textInput.trim()}>
-                {processing ? <><span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> Processing...</> : <><FiSend /> Process with AI</>}
+              <button className="btn btn-primary w-full" onClick={submitText} disabled={processing || !textInput.trim()}>
+                {processing ? <><span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> Generating AI Draft...</> : <><FiSend /> Generate AI Draft</>}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Step 3: Results */}
+      {/* Step 3: Review & Edit Draft */}
       {step === 3 && result && (
         <div className="animate-in">
           <div className="glass-card" style={{ padding: '28px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontWeight: 600 }}>AI Consultation Summary</h3>
+              <div>
+                <h3 style={{ fontWeight: 600, color: 'var(--accent-warning)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>⚠️</span> Review AI Draft
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Please review and edit the structured JSON below before saving permanently.</p>
+              </div>
               <span className="badge badge-ordered">{result.detectedLanguage}</span>
             </div>
 
             {result.transcript && (
               <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg-glass)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Transcript</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Original Transcript</div>
                 <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-secondary)' }}>{result.transcript}</p>
               </div>
             )}
 
-            {result.aiSummary && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                {result.aiSummary.symptoms?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Symptoms</div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {result.aiSummary.symptoms.map((s, i) => <span key={i} className="badge badge-pending">{s}</span>)}
-                    </div>
-                  </div>
-                )}
-                {result.aiSummary.diagnosis && (
-                  <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Diagnosis</div>
-                    <p style={{ fontWeight: 600 }}>{result.aiSummary.diagnosis}</p>
-                  </div>
-                )}
-                {result.aiSummary.clinicalNotes && (
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Clinical Notes</div>
-                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{result.aiSummary.clinicalNotes}</p>
-                  </div>
-                )}
-                {result.aiSummary.prescriptions?.length > 0 && (
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Prescriptions (auto-sent to Pharmacy)</div>
-                    <div className="table-wrapper">
-                      <table className="table">
-                        <thead><tr><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Duration</th></tr></thead>
-                        <tbody>
-                          {result.aiSummary.prescriptions.map((p, i) => (
-                            <tr key={i}><td>{p.medication}</td><td>{p.dosage}</td><td>{p.frequency}</td><td>{p.duration}</td></tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-                {result.aiSummary.labTests?.length > 0 && (
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Lab Tests (auto-sent to Lab)</div>
-                    <div className="table-wrapper">
-                      <table className="table">
-                        <thead><tr><th>Test</th><th>Instructions</th></tr></thead>
-                        <tbody>
-                          {result.aiSummary.labTests.map((t, i) => (
-                            <tr key={i}><td>{t.testName}</td><td>{t.instructions || '—'}</td></tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-                {result.aiSummary.followUp && (
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Follow-up</div>
-                    <p>{result.aiSummary.followUp}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+            <div className="form-group">
+              <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Editable Clinical Data (JSON Format)</label>
+              <textarea 
+                className="form-textarea" 
+                rows={15}
+                style={{ fontFamily: 'monospace', fontSize: '14px', background: '#0f172a', borderColor: 'var(--accent-primary)' }}
+                value={editableJson} 
+                onChange={(e) => setEditableJson(e.target.value)} 
+              />
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                * Ensure the format remains valid JSON. Changes here will be permanently saved.
+              </p>
+            </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn-primary" onClick={() => router.push(`/patients/${result.patientPid}`)}>View Patient Record →</button>
-            <button className="btn btn-secondary" onClick={() => { setStep(1); setResult(null); setAudioBlob(null); setTextInput(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); }}>New Consultation</button>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+              <button className="btn btn-success" onClick={saveFinalConsultation} disabled={processing} style={{ flex: 1, minWidth: '200px', justifyContent: 'center' }}>
+                {processing ? 'Saving...' : '💾 Confirm & Save Consultation'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => { setStep(2); }} style={{ flexShrink: 0 }}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
