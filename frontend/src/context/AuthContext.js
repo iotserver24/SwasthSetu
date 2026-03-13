@@ -24,19 +24,40 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const login = async (email, password) => {
-    const { data } = await api.post('/auth/login', { email, password });
+  /** Set auth state (token + user) after professional registration or OTP login */
+  const setAuth = (token, userData) => {
+    if (token) localStorage.setItem('token', token);
+    if (userData) {
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+    }
+  };
+
+  /** Admin login (email + password) */
+  const loginAdmin = async (email, password) => {
+    const { data } = await api.post('/auth/login-admin', { email, password });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
     return data.user;
   };
 
-  const register = async (name, email, password, role) => {
-    const { data } = await api.post('/auth/register', { name, email, password, role });
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    setUser(data.user);
+  /** Professional OTP login - step 2: verify OTP and get token */
+  const verifyLoginOtp = async (email, otp) => {
+    const { data } = await api.post('/auth/verify-login', { email, otp });
+    setAuth(data.token, data.user);
+    return data.user;
+  };
+
+  /** Legacy alias: login with email/password (admin only) */
+  const login = async (email, password) => {
+    return loginAdmin(email, password);
+  };
+
+  /** Legacy: register with email/password (admin only) */
+  const register = async (name, email, password) => {
+    const { data } = await api.post('/auth/register', { name, email, password });
+    setAuth(data.token, data.user);
     return data.user;
   };
 
@@ -48,7 +69,18 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        loginAdmin,
+        verifyLoginOtp,
+        register,
+        setAuth,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
