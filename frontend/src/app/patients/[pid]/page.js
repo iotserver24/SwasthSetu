@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { FiUser, FiPhone, FiMail, FiMapPin, FiHeart, FiActivity, FiFileText, FiPackage } from 'react-icons/fi';
+import { FiUser, FiPhone, FiMail, FiMapPin, FiHeart, FiActivity, FiFileText, FiPackage, FiDownload, FiPrinter } from 'react-icons/fi';
 
 export default function PatientDetailPage() {
   const { pid } = useParams();
@@ -48,6 +48,33 @@ export default function PatientDetailPage() {
     }
   };
 
+  const handleDownloadQr = () => {
+    if (!qr) return;
+    const link = document.createElement('a');
+    link.href = qr;
+    link.download = `patient-qr-${patient.pid}.png`;
+    link.click();
+  };
+
+  const handlePrintQr = () => {
+    if (!qr) return;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head><title>Print QR - ${patient.pid}</title></head>
+        <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;">
+          <h2>Patient: ${patient.name}</h2>
+          <h3>PID: ${patient.pid}</h3>
+          <img src="${qr}" style="width:300px;height:300px;margin-top:20px;" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    setTimeout(() => printWindow.close(), 500);
+  };
+
   if (loading || authLoading) return <div className="loading-screen"><div className="spinner" /></div>;
   if (!patient) return <div className="container" style={{ padding: '40px', textAlign: 'center' }}><h2>Patient not found</h2></div>;
 
@@ -87,8 +114,14 @@ export default function PatientDetailPage() {
           )}
         </div>
         {qr && (
-          <div style={{ background: 'white', borderRadius: 'var(--radius-md)', padding: '8px' }}>
-            <img src={qr} alt="QR" style={{ width: '100px', height: '100px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <div style={{ background: 'white', borderRadius: 'var(--radius-md)', padding: '8px' }}>
+              <img src={qr} alt="QR" style={{ width: '100px', height: '100px' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={handleDownloadQr} title="Download QR Code"><FiDownload /></button>
+              <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={handlePrintQr} title="Print QR Code"><FiPrinter /></button>
+            </div>
           </div>
         )}
       </div>
