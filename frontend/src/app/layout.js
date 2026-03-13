@@ -21,10 +21,11 @@ export default function RootLayout({ children }) {
             position="top-right"
             toastOptions={{
               style: {
-                background: '#1e293b',
-                color: '#f1f5f9',
-                border: '1px solid rgba(148, 163, 184, 0.1)',
+                background: '#ffffff',
+                color: '#0f172a',
+                border: '1px solid rgba(148, 163, 184, 0.4)',
                 borderRadius: '12px',
+                boxShadow: '0 10px 25px rgba(15, 23, 42, 0.12)',
               },
             }}
           />

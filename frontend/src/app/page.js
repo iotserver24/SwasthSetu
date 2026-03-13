@@ -5,12 +5,12 @@ import { motion } from 'framer-motion';
 import { FiMic, FiGlobe, FiUsers, FiActivity, FiShield, FiSearch } from 'react-icons/fi';
 
 const features = [
-  { icon: FiMic, title: 'Voice Consultation', desc: 'Record doctor-patient consultations and get instant AI transcription', color: '#06b6d4' },
-  { icon: FiGlobe, title: 'Multilingual Support', desc: 'Auto-detect Hindi, Tamil, Telugu, Bengali and 10+ Indian languages', color: '#8b5cf6' },
-  { icon: FiUsers, title: 'Patient Records', desc: 'Centralized patient IDs with full consultation history and prescriptions', color: '#10b981' },
-  { icon: FiActivity, title: 'Department Workflow', desc: 'Seamlessly route prescriptions to pharmacy and lab tests to laboratory', color: '#f59e0b' },
-  { icon: FiShield, title: 'Audit Trail', desc: 'Complete access logs for compliance - who viewed what, when', color: '#ef4444' },
-  { icon: FiSearch, title: 'QR Patient ID', desc: 'Emergency-ready QR codes for instant patient identification and lookup', color: '#3b82f6' },
+  { icon: FiMic, title: 'Voice Consultation', desc: 'Record doctor-patient consultations and get instant AI transcription', color: '#1152d4' },
+  { icon: FiGlobe, title: 'Multilingual Support', desc: 'Auto-detect Hindi, Tamil, Telugu, Bengali and 10+ Indian languages', color: '#1d4ed8' },
+  { icon: FiUsers, title: 'Patient Records', desc: 'Centralized patient IDs with full consultation history and prescriptions', color: '#2563eb' },
+  { icon: FiActivity, title: 'Department Workflow', desc: 'Seamlessly route prescriptions to pharmacy and lab tests to laboratory', color: '#3b82f6' },
+  { icon: FiShield, title: 'Audit Trail', desc: 'Complete access logs for compliance - who viewed what, when', color: '#1e40af' },
+  { icon: FiSearch, title: 'QR Patient ID', desc: 'Emergency-ready QR codes for instant patient identification and lookup', color: '#0ea5e9' },
 ];
 
 export default function Home() {
