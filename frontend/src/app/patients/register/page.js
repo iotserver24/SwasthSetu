@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { FiUserPlus, FiCheck } from 'react-icons/fi';
+import { FiUserPlus, FiCheck, FiDownload, FiPrinter } from 'react-icons/fi';
 
 export default function RegisterPatientPage() {
   const { user, loading: authLoading } = useAuth();
@@ -42,6 +42,33 @@ export default function RegisterPatientPage() {
     }
   };
 
+  const handleDownloadQr = () => {
+    if (!qrData?.qr) return;
+    const link = document.createElement('a');
+    link.href = qrData.qr;
+    link.download = `patient-qr-${qrData.pid}.png`;
+    link.click();
+  };
+
+  const handlePrintQr = () => {
+    if (!qrData?.qr) return;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head><title>Print QR - ${qrData.pid}</title></head>
+        <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;">
+          <h2>Patient: ${qrData.name}</h2>
+          <h3>PID: ${qrData.pid}</h3>
+          <img src="${qrData.qr}" style="width:300px;height:300px;margin-top:20px;" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    setTimeout(() => printWindow.close(), 500);
+  };
+
   if (authLoading) return <div className="loading-screen"><div className="spinner" /></div>;
 
   if (qrData) {
@@ -59,9 +86,13 @@ export default function RegisterPatientPage() {
           }}>
             <img src={qrData.qr} alt="Patient QR Code" style={{ width: '200px', height: '200px' }} />
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
             Scan this QR code to access the patient's records instantly
           </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadQr}><FiDownload /> Download</button>
+            <button className="btn btn-secondary btn-sm" onClick={handlePrintQr}><FiPrinter /> Print</button>
+          </div>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => { setQrData(null); setForm({ name: '', age: '', gender: '', phone: '', email: '', address: '', bloodGroup: '', allergies: '', languages: '', emergencyContact: { name: '', phone: '', relation: '' } }); }}>
               <FiUserPlus /> Register Another
