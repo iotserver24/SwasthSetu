@@ -579,3 +579,13 @@ html, body {
   align-items: center;
   gap: 10px;
 }
+
+/* ─── Auth split layout (DNA + form) ─── */
+.auth-dna-panel {
+  display: none;
+}
+@media (min-width: 768px) {
+  .auth-dna-panel {
+    display: block;
+  }
+}
