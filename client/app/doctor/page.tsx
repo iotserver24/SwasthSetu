@@ -1,12 +1,12 @@
-"use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import DashboardLayout from "@/components/layout/DashboardLayout";
-import TranscriptPanel from "@/components/consultation/TranscriptPanel";
-import SummaryCard from "@/components/consultation/SummaryCard";
-import { previewTranscript, saveConsultation } from "@/services/api";
+\"use client\";
+import { useEffect, useMemo, useRef, useState } from \"react\";
+import { useRouter } from \"next/navigation\";
+import DashboardLayout from \"@/components/layout/DashboardLayout\";
+import TranscriptPanel from \"@/components/consultation/TranscriptPanel\";
+import SummaryCard from \"@/components/consultation/SummaryCard\";
+import { saveConsultation } from \"@/services/api\";
 
-type Stage = "idle" | "recording" | "transcript-ready" | "summary-ready" | "saved";
+type Stage = \"idle\" | \"recording\" | \"transcript-ready\" | \"summary-ready\" | \"saved\";
 
 interface TranscriptLine { speaker: string; lang: string; text: string; }
 interface Prescription { medicine: string; dosage: string; duration: string; }
@@ -14,65 +14,141 @@ interface Summary {
   symptoms: string[];
   diagnosis: string;
   prescriptions: Prescription[];
-  diagnosticTests: string[];
+  tests: string[];
   followUpInstructions: string;
 }
 
-const LANGUAGES = ["Hindi", "Tamil", "Bengali", "Telugu", "Marathi", "Kannada", "Gujarati", "English"];
+const LANGUAGES = [\"Hindi\", \"Tamil\", \"Bengali\", \"Telugu\", \"Marathi\", \"Kannada\", \"Gujarati\", \"English\"];
+
+function parseTranscriptLines(raw: string): TranscriptLine[] {
+  return raw
+    .split(\"\\n\")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(Patient|Doctor)\\s*[:\\-]\\s*(.+)$/i);
+      if (match) {
+        const speaker = match[1][0].toUpperCase() + match[1].slice(1).toLowerCase();
+        return { speaker, lang: \"\", text: match[2] };
+      }
+      return { speaker: \"Patient\", lang: \"\", text: line };
+    });
+}
 
 export default function DoctorPage() {
   const router = useRouter();
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const [stage, setStage] = useState<Stage>("idle");
-  const [patientLanguage, setPatientLanguage] = useState("Hindi");
-  const [name, setName] = useState("");
-  const [age, setAge] = useState("");
-  const [gender, setGender] = useState("Male");
-  const [existingPid, setExistingPid] = useState("");
+  const [stage, setStage] = useState<Stage>(\"idle\");
+  const [patientLanguage, setPatientLanguage] = useState(\"Hindi\");
+  const [name, setName] = useState(\"\");
+  const [age, setAge] = useState(\"\");
+  const [gender, setGender] = useState(\"Male\");
+  const [existingPid, setExistingPid] = useState(\"\");
 
-  const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
-  const [patientLang, setPatientLang] = useState("Hindi");
-  const [doctorLang, setDoctorLang] = useState("English");
+  const [transcriptText, setTranscriptText] = useState(\"\");
+  const [audioBase64, setAudioBase64] = useState<string | null>(null);
+  const [audioMimeType, setAudioMimeType] = useState(\"audio/webm\");
+
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [savedPatientId, setSavedPatientId] = useState("");
-
-  const [error, setError] = useState("");
+  const [savedPatientId, setSavedPatientId] = useState(\"\");
+  const [error, setError] = useState(\"\");
   const [loading, setLoading] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  const transcriptLines = useMemo(() => parseTranscriptLines(transcriptText), [transcriptText]);
 
   function reset() {
-    setStage("idle"); setTranscriptLines([]); setSummary(null); setSavedPatientId(""); setError("");
+    setStage(\"idle\");
+    setTranscriptText(\"\");
+    setSummary(null);
+    setSavedPatientId(\"\");
+    setError(\"\");
+    setAudioBase64(null);
+    setRecordingSeconds(0);
   }
 
-  async function handleStart() {
-    setError(""); setLoading(true); setStage("recording"); setTranscriptLines([]);
-    try {
-      const data = (await previewTranscript(patientLanguage)) as { lines: TranscriptLine[]; patientLanguage: string; doctorLanguage: string; };
-      setPatientLang(data.patientLanguage);
-      setDoctorLang(data.doctorLanguage);
-      for (const line of data.lines) {
-        await new Promise((r) => setTimeout(r, 850));
-        setTranscriptLines((prev) => [...prev, line]);
-      }
-      setStage("transcript-ready");
-    } catch (e: unknown) {
-      setError((e as Error).message); setStage("idle");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (stage === \"recording\") {
+      timer = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
     }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [stage]);
+
+  async function startRecording() {
+    setError(\"\");
+    setRecordingSeconds(0);
+    setTranscriptText(\"\");
+    setAudioBase64(null);
+    setStage(\"recording\");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType });
+        setAudioMimeType(mediaRecorder.mimeType || \"audio/webm\");
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(\",\")[1];
+          setAudioBase64(base64);
+          setStage(\"transcript-ready\");
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      mediaRecorder.start();
+    } catch (err) {
+      setStage(\"idle\");
+      setError(\"Microphone access denied or unavailable.\");
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
   }
 
   async function handleGenerateSummary() {
     if (!name.trim() || !age || !gender) {
-      setError("Fill in patient name, age, and gender first."); return;
+      setError(\"Fill in patient name, age, and gender first.\");
+      return;
     }
-    setError(""); setLoading(true);
+
+    if (!transcriptText.trim() && !audioBase64) {
+      setError(\"Provide a transcript or record audio to continue.\");
+      return;
+    }
+
+    setError(\"\");
+    setLoading(true);
     try {
       const data = (await saveConsultation({
         patientId: existingPid.trim() || undefined,
-        name: name.trim(), age: parseInt(age), gender, patientLanguage,
-      })) as { patientId: string; summary: Summary };
-      setSummary(data.summary); setSavedPatientId(data.patientId);
-      setStage("summary-ready");
+        name: name.trim(),
+        age: parseInt(age),
+        gender,
+        patientLanguage,
+        transcript: transcriptText.trim() || undefined,
+        audioBase64: transcriptText.trim() ? undefined : audioBase64 || undefined,
+        audioMimeType,
+      })) as { patientId: string; transcript: string; structuredSummary: Summary };
+
+      setTranscriptText(data.transcript);
+      setSummary(data.structuredSummary);
+      setSavedPatientId(data.patientId);
+      setStage(\"summary-ready\");
     } catch (e: unknown) {
       setError((e as Error).message);
     } finally {
@@ -210,7 +286,7 @@ export default function DoctorPage() {
             {stage === "idle" && (
               <div className="flex flex-col items-center gap-4 py-4">
                 <button
-                  onClick={handleStart}
+                  onClick={startRecording}
                   disabled={loading}
                   className="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50"
                   style={{
@@ -229,12 +305,41 @@ export default function DoctorPage() {
               </div>
             )}
 
+            {stage === "idle" && transcriptText.trim() && (
+              <div className="space-y-3">
+                <div
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-medium"
+                  style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af" }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Transcript text detected
+                </div>
+                <button
+                  onClick={handleGenerateSummary}
+                  disabled={loading}
+                  className="w-full py-3 rounded-xl text-[13.5px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{
+                    background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
+                    boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
+                  }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  {loading ? "Generating..." : "Generate Clinical Summary"}
+                </button>
+              </div>
+            )}
+
             {/* RECORDING */}
             {stage === "recording" && (
               <div className="flex flex-col items-center gap-4 py-4">
                 <div
                   className="w-20 h-20 rounded-full flex items-center justify-center mic-active"
                   style={{ background: "linear-gradient(135deg, #dc2626, #ef4444)", boxShadow: "0 8px 24px rgba(220,38,38,0.4)" }}
+                  onClick={stopRecording}
                 >
                   <svg className="w-9 h-9 text-white" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z"/>
@@ -246,7 +351,15 @@ export default function DoctorPage() {
                     <span className="recording-dot w-2 h-2 rounded-full bg-red-500 inline-block" />
                     <p className="text-[14px] font-semibold text-red-600">Recording...</p>
                   </div>
-                  <p className="text-[12px] text-slate-400 mt-0.5">Capturing consultation</p>
+                  <p className="text-[12px] text-slate-400 mt-0.5">
+                    Capturing consultation · {recordingSeconds}s
+                  </p>
+                  <button
+                    onClick={stopRecording}
+                    className="mt-2 text-[12px] text-slate-500 hover:text-slate-700 underline"
+                  >
+                    Stop Recording
+                  </button>
                 </div>
               </div>
             )}
@@ -261,7 +374,7 @@ export default function DoctorPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Transcript captured successfully
+                  Audio captured successfully
                 </div>
                 <button
                   onClick={handleGenerateSummary}
@@ -350,10 +463,36 @@ export default function DoctorPage() {
 
         {/* ── RIGHT: Transcript + Summary ────────────────── */}
         <div className="space-y-5">
+          {/* Transcript editor */}
+          <div
+            className="rounded-2xl p-5"
+            style={{ background: "#fff", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[12px] font-bold uppercase tracking-wider text-slate-400">Transcript</p>
+              <button
+                onClick={() => setTranscriptText("")}
+                className="text-[12px] text-slate-400 hover:text-slate-600"
+              >
+                Clear
+              </button>
+            </div>
+            <textarea
+              value={transcriptText}
+              onChange={(e) => setTranscriptText(e.target.value)}
+              placeholder="Paste or edit the transcript here. If empty, audio will be transcribed by Sarvam."
+              className="w-full min-h-[120px] rounded-xl px-4 py-3 text-[13px] focus:outline-none"
+              style={{ border: "1.5px solid #e2e8f0", background: "#f8fafc" }}
+            />
+            <p className="text-[11.5px] text-slate-400 mt-2">
+              Tip: You can type or paste a transcript instead of recording audio.
+            </p>
+          </div>
+
           <TranscriptPanel
             lines={transcriptLines}
-            patientLanguage={patientLang}
-            doctorLanguage={doctorLang}
+            patientLanguage={patientLanguage}
+            doctorLanguage={"English"}
             isLive={stage === "recording"}
           />
           {summary && <SummaryCard summary={summary} />}

@@ -8,7 +8,7 @@ interface Summary {
   symptoms: string[];
   diagnosis: string;
   prescriptions: Prescription[];
-  diagnosticTests: string[];
+  tests: string[];
   followUpInstructions: string;
 }
 
@@ -132,7 +132,7 @@ export default function SummaryCard({ summary }: Props) {
             }
           />
           <div className="flex flex-wrap gap-2">
-            {summary.diagnosticTests.map((t, i) => (
+            {summary.tests.map((t, i) => (
               <span
                 key={i}
                 className="px-3 py-1.5 rounded-full text-[12px] font-medium"

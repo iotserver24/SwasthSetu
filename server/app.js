@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
+import { env } from "./services/config/env.js";
 import authRoutes from "./routes/authRoutes.js";
 import patientRoutes from "./routes/patientRoutes.js";
 import consultationRoutes from "./routes/consultationRoutes.js";
@@ -12,16 +13,10 @@ import pharmacyRoutes from "./routes/pharmacyRoutes.js";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = env.port;
 
-const allowedOrigins = [
-  process.env.CLIENT_ORIGIN || "http://localhost:3000",
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:3002",
-];
 app.use(cors({ origin: (origin, cb) => cb(null, true) }));
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "SwasthyaSetu API" }));
 

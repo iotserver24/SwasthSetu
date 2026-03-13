@@ -11,10 +11,12 @@ const ConsultationSchema = new mongoose.Schema({
       duration: String,
     },
   ],
+  tests: [{ type: String }],
   diagnosticTests: [{ type: String }],
   followUpInstructions: { type: String, default: "" },
   patientLanguage: { type: String, default: "Hindi" },
   doctorLanguage: { type: String, default: "English" },
+  createdAt: { type: Date, default: Date.now },
   date: { type: Date, default: Date.now },
 });
 

@@ -1,30 +1,74 @@
-import { transcriptAdapter } from "./adapters/transcriptAdapter.js";
-import { summaryAdapter } from "./adapters/summaryAdapter.js";
 import { getOrCreatePatient } from "./patientService.js";
-import Patient from "../models/Patient.js";
+import { getSttProvider } from "./stt/stt.interface.js";
+import { getSummarizerProvider } from "./ai/summarizer.interface.js";
 
-export async function saveConsultation({ patientId, name, age, gender, patientLanguage, rawTranscript }) {
+function normalizeSummary(summary) {
+  return {
+    symptoms: summary.symptoms || [],
+    diagnosis: summary.diagnosis || "",
+    prescriptions: summary.prescriptions || [],
+    tests: summary.tests || summary.diagnosticTests || [],
+    followUpInstructions: summary.followUpInstructions || "",
+  };
+}
+
+function normalizePrescriptions(prescriptions) {
+  if (!Array.isArray(prescriptions)) return [];
+  return prescriptions.map((rx) => {
+    if (typeof rx === "string") {
+      return { medicine: rx, dosage: "", duration: "" };
+    }
+    return {
+      medicine: rx.medicine || rx.name || "Prescription",
+      dosage: rx.dosage || "",
+      duration: rx.duration || "",
+    };
+  });
+}
+
+export async function saveConsultation({
+  patientId,
+  name,
+  age,
+  gender,
+  patientLanguage,
+  transcript,
+  audioBuffer,
+  audioMimeType,
+}) {
   const patient = await getOrCreatePatient({ patientId, name, age, gender });
 
-  const transcriptResult = transcriptAdapter({ patientLanguage, rawAudio: rawTranscript });
-  const summary = summaryAdapter(transcriptResult);
+  let transcriptText = transcript?.trim();
+  if (!transcriptText && audioBuffer) {
+    const sttProvider = getSttProvider();
+    transcriptText = await sttProvider(audioBuffer, audioMimeType);
+  }
+
+  if (!transcriptText) {
+    throw new Error("Transcript is required (text or audio).");
+  }
+
+  const summarizer = getSummarizerProvider();
+  const rawSummary = await summarizer(transcriptText);
+  const summary = normalizeSummary(rawSummary);
+  const prescriptions = normalizePrescriptions(summary.prescriptions);
 
   const consultation = {
-    transcript: transcriptResult.fullText,
+    transcript: transcriptText,
     symptoms: summary.symptoms,
     diagnosis: summary.diagnosis,
-    prescriptions: summary.prescriptions,
-    diagnosticTests: summary.diagnosticTests,
+    prescriptions,
+    tests: summary.tests,
     followUpInstructions: summary.followUpInstructions,
-    patientLanguage: transcriptResult.patientLanguage,
-    doctorLanguage: transcriptResult.doctorLanguage,
-    date: new Date(),
+    patientLanguage: patientLanguage || "Unknown",
+    doctorLanguage: "English",
+    createdAt: new Date(),
   };
 
   patient.consultations.push(consultation);
 
   // Merge prescriptions into pharmacy items (avoid exact duplicates)
-  for (const rx of summary.prescriptions) {
+  for (const rx of prescriptions) {
     const exists = patient.pharmacyItems.some((p) => p.medicine === rx.medicine);
     if (!exists) {
       patient.pharmacyItems.push({ medicine: rx.medicine, dosage: rx.dosage, duration: rx.duration });
@@ -32,7 +76,7 @@ export async function saveConsultation({ patientId, name, age, gender, patientLa
   }
 
   // Merge diagnostic tests into lab results (avoid exact duplicates)
-  for (const test of summary.diagnosticTests) {
+  for (const test of summary.tests) {
     const exists = patient.labResults.some((l) => l.testName === test);
     if (!exists) {
       patient.labResults.push({ testName: test, status: "pending" });
@@ -41,9 +85,5 @@ export async function saveConsultation({ patientId, name, age, gender, patientLa
 
   await patient.save();
 
-  return { patient, consultation, transcriptResult, summary };
-}
-
-export async function generateTranscriptPreview(patientLanguage) {
-  return transcriptAdapter({ patientLanguage });
+  return { patient, consultation, transcript: transcriptText, structuredSummary: summary };
 }

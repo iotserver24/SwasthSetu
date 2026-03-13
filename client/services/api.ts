@@ -50,13 +50,11 @@ export function saveConsultation(payload: {
   age: number;
   gender: string;
   patientLanguage: string;
-  rawTranscript?: string;
+  transcript?: string;
+  audioBase64?: string;
+  audioMimeType?: string;
 }) {
   return request("/consultation", { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function previewTranscript(patientLanguage: string) {
-  return request(`/consultation/transcript/preview?patientLanguage=${encodeURIComponent(patientLanguage)}`);
 }
 
 // ─── Lab ──────────────────────────────────────────────────────────────────────

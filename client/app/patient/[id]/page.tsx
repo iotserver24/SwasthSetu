@@ -14,11 +14,13 @@ interface Consultation {
   symptoms: string[];
   diagnosis: string;
   prescriptions: Prescription[];
-  diagnosticTests: string[];
+  tests?: string[];
+  diagnosticTests?: string[];
   followUpInstructions: string;
   patientLanguage: string;
   doctorLanguage: string;
-  date: string;
+  createdAt?: string;
+  date?: string;
 }
 interface LabResult { _id: string; testName: string; result: string; status: string; uploadedAt: string; }
 interface PharmacyItem { _id: string; medicine: string; dosage: string; duration: string; dispensed: boolean; dispensedAt?: string; }
@@ -213,7 +215,7 @@ export default function PatientRecordPage() {
                         {c.diagnosis || "Consultation Record"}
                       </p>
                       <p className="text-[12px] text-slate-400 mt-0.5">
-                        {new Date(c.date).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(c.createdAt || c.date || Date.now()).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                         &nbsp;·&nbsp;
                         <span className="text-orange-500 font-medium">{c.patientLanguage}</span>
                         &nbsp;→&nbsp;
@@ -243,7 +245,7 @@ export default function PatientRecordPage() {
                           symptoms: c.symptoms,
                           diagnosis: c.diagnosis,
                           prescriptions: c.prescriptions,
-                          diagnosticTests: c.diagnosticTests,
+                          tests: c.tests || c.diagnosticTests || [],
                           followUpInstructions: c.followUpInstructions,
                         }}
                       />

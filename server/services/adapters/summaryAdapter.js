@@ -7,13 +7,13 @@
 const MOCK_SUMMARIES = {
   hindi: {
     symptoms: ["Fever for 3 days", "Headache", "Body aches", "Chills", "Runny nose", "Mild cough"],
-    diagnosis: "Acute Viral Upper Respiratory Tract Infection (Influenza-like illness)",
+    diagnosis: "Acute Viral Upper Respiratory Tract Infection (Influenza-like aillness)",
     prescriptions: [
       { medicine: "Paracetamol 500mg", dosage: "1 tablet every 6 hours", duration: "5 days" },
       { medicine: "Cetirizine 10mg (Antihistamine)", dosage: "1 tablet at bedtime", duration: "5 days" },
       { medicine: "Vitamin C 500mg", dosage: "1 tablet daily", duration: "7 days" },
     ],
-    diagnosticTests: ["Complete Blood Count (CBC)", "Rapid Influenza Antigen Test"],
+    tests: ["Complete Blood Count (CBC)", "Rapid Influenza Antigen Test"],
     followUpInstructions:
       "Rest and adequate fluid intake. Return if fever persists beyond 5 days or breathing difficulty develops. Review CBC results in 2 days.",
   },
@@ -25,7 +25,7 @@ const MOCK_SUMMARIES = {
       { medicine: "Pantoprazole 40mg (Antacid)", dosage: "1 tablet before breakfast", duration: "5 days" },
       { medicine: "Domperidone 10mg", dosage: "1 tablet before meals", duration: "3 days" },
     ],
-    diagnosticTests: ["Stool Culture and Sensitivity", "Stool Routine Microscopy"],
+    tests: ["Stool Culture and Sensitivity", "Stool Routine Microscopy"],
     followUpInstructions:
       "Maintain light diet (BRAT diet). Ensure adequate hydration. Return if vomiting persists more than 48 hours or blood appears in stool.",
   },

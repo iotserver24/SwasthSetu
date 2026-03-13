@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
+import { env } from "../services/config/env.js";
 
 export async function connectDB() {
-  const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/swasthyasetu";
+  const uri = env.mongoUri;
   try {
     await mongoose.connect(uri);
     console.log(`MongoDB connected: ${mongoose.connection.host}`);
