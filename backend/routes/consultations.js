@@ -40,14 +40,19 @@ router.post('/audio', authenticate, authorizeRoles('doctor'), upload.single('aud
       aiSummary: aiResult.summary,
     });
 
-    // Auto-create prescriptions
+    // Auto-create prescriptions (map AI's 'medication' field to schema's 'name')
     if (aiResult.summary?.prescriptions?.length) {
       await Prescription.create({
         consultation: consultation._id,
         patient: patient._id,
         patientPid: patient.pid,
         doctorName: req.user.name,
-        medications: aiResult.summary.prescriptions,
+        medications: aiResult.summary.prescriptions.map(p => ({
+          name: p.medication || p.name || 'Unknown',
+          dosage: p.dosage || '',
+          frequency: p.frequency || '',
+          duration: p.duration || '',
+        })),
       });
     }
 
@@ -96,14 +101,19 @@ router.post('/text', authenticate, authorizeRoles('doctor'), logAudit('CREATE', 
       aiSummary: aiResult.summary,
     });
 
-    // Auto-create prescriptions
+    // Auto-create prescriptions (map AI's 'medication' field to schema's 'name')
     if (aiResult.summary?.prescriptions?.length) {
       await Prescription.create({
         consultation: consultation._id,
         patient: patient._id,
         patientPid: patient.pid,
         doctorName: req.user.name,
-        medications: aiResult.summary.prescriptions,
+        medications: aiResult.summary.prescriptions.map(p => ({
+          name: p.medication || p.name || 'Unknown',
+          dosage: p.dosage || '',
+          frequency: p.frequency || '',
+          duration: p.duration || '',
+        })),
       });
     }
 
