@@ -11,78 +11,37 @@ const { processConsultationAudio, processConsultationText } = require('../servic
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
-// Create consultation from audio
-router.post('/audio', authenticate, authorizeRoles('doctor'), upload.single('audio'), logAudit('CREATE', 'Consultation'), async (req, res) => {
+// Create consultation draft from audio (No DB save)
+router.post('/audio/draft', authenticate, authorizeRoles('doctor'), upload.single('audio'), async (req, res) => {
   try {
     const { patientPid } = req.body;
     const patient = await Patient.findOne({ pid: patientPid });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
-    // Upload audio to Catbox (for storage/reference)
     let audioUrl = '';
     if (req.file) {
       audioUrl = await uploadToCatbox(req.file.buffer, req.file.originalname || 'recording.webm');
     }
 
-    // Transcribe with Whisper + analyze with Gemini
     const aiResult = await processConsultationAudio(req.file.buffer, audioUrl, {
       name: patient.name, age: patient.age, gender: patient.gender,
     });
 
-    // Create consultation record
-    const consultation = await Consultation.create({
-      patient: patient._id,
-      doctor: req.user._id,
-      patientPid: patient.pid,
+    // Return the DRAFT back to frontend for review/editing
+    res.status(200).json({
+      patientPid,
       audioUrl,
       transcript: aiResult.transcript,
       detectedLanguage: aiResult.detectedLanguage,
       aiSummary: aiResult.summary,
     });
-
-    // Auto-create prescriptions (map AI's 'medication' field to schema's 'name')
-    if (aiResult.summary?.prescriptions?.length) {
-      await Prescription.create({
-        consultation: consultation._id,
-        patient: patient._id,
-        patientPid: patient.pid,
-        doctorName: req.user.name,
-        medications: aiResult.summary.prescriptions.map(p => ({
-          name: p.medication || p.name || 'Unknown',
-          dosage: p.dosage || '',
-          frequency: p.frequency || '',
-          duration: p.duration || '',
-        })),
-      });
-    }
-
-    // Auto-create lab tests
-    if (aiResult.summary?.labTests?.length) {
-      for (const test of aiResult.summary.labTests) {
-        await LabTest.create({
-          consultation: consultation._id,
-          patient: patient._id,
-          patientPid: patient.pid,
-          testName: test.testName,
-          instructions: test.instructions,
-          orderedBy: req.user.name,
-        });
-      }
-    }
-
-    const populated = await Consultation.findById(consultation._id)
-      .populate('patient', 'pid name age gender')
-      .populate('doctor', 'name email');
-
-    res.status(201).json(populated);
   } catch (err) {
-    console.error('Consultation audio error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Create consultation from text
-router.post('/text', authenticate, authorizeRoles('doctor'), logAudit('CREATE', 'Consultation'), async (req, res) => {
+// Create consultation draft from text (No DB save)
+router.post('/text/draft', authenticate, authorizeRoles('doctor'), async (req, res) => {
   try {
     const { patientPid, text } = req.body;
     const patient = await Patient.findOne({ pid: patientPid });
@@ -92,23 +51,43 @@ router.post('/text', authenticate, authorizeRoles('doctor'), logAudit('CREATE', 
       name: patient.name, age: patient.age, gender: patient.gender,
     });
 
-    const consultation = await Consultation.create({
-      patient: patient._id,
-      doctor: req.user._id,
-      patientPid: patient.pid,
+    // Return the DRAFT back to frontend for review/editing
+    res.status(200).json({
+      patientPid,
       transcript: aiResult.transcript,
       detectedLanguage: aiResult.detectedLanguage,
       aiSummary: aiResult.summary,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    // Auto-create prescriptions (map AI's 'medication' field to schema's 'name')
-    if (aiResult.summary?.prescriptions?.length) {
+// Finalize and Save Consultation (After Doctor Review)
+router.post('/save', authenticate, authorizeRoles('doctor'), logAudit('CREATE', 'Consultation'), async (req, res) => {
+  try {
+    const { patientPid, audioUrl, transcript, detectedLanguage, aiSummary } = req.body;
+    const patient = await Patient.findOne({ pid: patientPid });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    const consultation = await Consultation.create({
+      patient: patient._id,
+      doctor: req.user._id,
+      patientPid: patient.pid,
+      audioUrl: audioUrl || '',
+      transcript: transcript || '',
+      detectedLanguage: detectedLanguage || 'Unknown',
+      aiSummary: aiSummary || {},
+      createdAt: new Date(), // Explicitly storing date/time of final save
+    });
+
+    if (aiSummary?.prescriptions?.length) {
       await Prescription.create({
         consultation: consultation._id,
         patient: patient._id,
         patientPid: patient.pid,
         doctorName: req.user.name,
-        medications: aiResult.summary.prescriptions.map(p => ({
+        medications: aiSummary.prescriptions.map(p => ({
           name: p.medication || p.name || 'Unknown',
           dosage: p.dosage || '',
           frequency: p.frequency || '',
@@ -117,9 +96,8 @@ router.post('/text', authenticate, authorizeRoles('doctor'), logAudit('CREATE', 
       });
     }
 
-    // Auto-create lab tests
-    if (aiResult.summary?.labTests?.length) {
-      for (const test of aiResult.summary.labTests) {
+    if (aiSummary?.labTests?.length) {
+      for (const test of aiSummary.labTests) {
         await LabTest.create({
           consultation: consultation._id,
           patient: patient._id,
