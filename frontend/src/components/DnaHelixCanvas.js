@@ -3,8 +3,10 @@
 import { useEffect, useRef } from 'react';
 
 const PARTICLE_COUNT = 120;
+const RUNG_DOT_COUNT = 40; // more dots per rung so they read as a solid line
 const HELIX_CYAN = '#22d3ee';
 const HELIX_BLUE = '#1e40af';
+const RUNG_COLOR = 'rgba(34, 211, 238, 0.85)'; // visible cyan for rung dots
 
 export default function DnaHelixCanvas() {
   const canvasRef = useRef(null);
@@ -63,12 +65,11 @@ export default function DnaHelixCanvas() {
           HELIX_BLUE
         );
 
+        // Rungs: draw as dots (same style as strands) instead of thin lines
         if (i % 6 === 0) {
-          ctx.beginPath();
-          ctx.moveTo(centerX + Math.cos(angle) * radius, y);
-          ctx.lineTo(centerX + Math.cos(angle + Math.PI) * radius, y);
-          ctx.strokeStyle = 'rgba(34, 211, 238, 0.12)';
-          ctx.stroke();
+          const x1 = centerX + Math.cos(angle) * radius;
+          const x2 = centerX + Math.cos(angle + Math.PI) * radius;
+          drawRungDots(ctx, x1, x2, y, time, angle);
         }
       }
 
@@ -92,6 +93,28 @@ export default function DnaHelixCanvas() {
         ctx.shadowBlur = 0;
       }
       ctx.globalAlpha = 1;
+    }
+
+    /** Draw rung as a row of dots (same dot style as helix strands) */
+    function drawRungDots(ctx, x1, x2, y, time, angle) {
+      for (let d = 0; d < RUNG_DOT_COUNT; d++) {
+        const t = (d + 1) / (RUNG_DOT_COUNT + 1);
+        const x = x1 + (x2 - x1) * t;
+        // Slight pulse and size variation so dots feel animated like the sides
+        const pulse = 0.7 + 0.3 * Math.sin(time * 2 + angle + d * 0.5);
+        const size = 1.5 + pulse * 1.8;
+        const alpha = 0.5 + pulse * 0.45;
+
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fillStyle = RUNG_COLOR;
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = HELIX_CYAN;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+      }
     }
 
     resize();
