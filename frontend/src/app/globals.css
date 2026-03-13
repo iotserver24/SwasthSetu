@@ -589,3 +589,23 @@ html, body {
     display: block;
   }
 }
+
+/* Auth sliding layout: DNA slides left↔right; form panel slides with it. Mobile: form full width, no DNA. */
+.auth-dna-slide-panel {
+  display: none;
+}
+@media (max-width: 767px) {
+  .auth-form-slide-panel {
+    left: 0% !important;
+    width: 100% !important;
+  }
+}
+@media (min-width: 768px) {
+  .auth-dna-slide-panel {
+    display: block;
+  }
+  .auth-form-slide-panel {
+    width: 50% !important;
+    /* left comes from layout inline for slide animation */
+  }
+}
