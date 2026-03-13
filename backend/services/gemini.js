@@ -1,4 +1,6 @@
 const OpenAI = require('openai');
+const fetch = require('node-fetch');
+const FormData = require('form-data');
 
 const client = new OpenAI({
   baseURL: process.env.AI_BASE_URL,
@@ -6,87 +8,55 @@ const client = new OpenAI({
 });
 
 /**
- * Send audio URL + patient context to Gemini for transcription, language detection,
- * and structured clinical summary.
- * @param {string} audioUrl - Public URL of the audio file (from Catbox)
+ * Transcribe audio using Pollinations Whisper API (scribe model).
+ * @param {Buffer} audioBuffer - Raw audio file buffer
+ * @param {string} filename - e.g. 'recording.webm'
+ * @returns {Promise<string>} Transcribed text
+ */
+async function transcribeAudio(audioBuffer, filename = 'recording.webm') {
+  const form = new FormData();
+  form.append('file', audioBuffer, { filename, contentType: 'audio/webm' });
+  form.append('model', 'scribe');
+  form.append('response_format', 'json');
+
+  const response = await fetch('https://gen.pollinations.ai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.AI_API_KEY}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Whisper transcription failed (${response.status}): ${errText}`);
+  }
+
+  const result = await response.json();
+  return result.text || '';
+}
+
+/**
+ * Process audio consultation: transcribe with Whisper, then analyze with Gemini.
+ * @param {Buffer} audioBuffer - Raw audio file buffer
+ * @param {string} audioUrl - Public URL of the uploaded audio (for reference)
  * @param {object} patientInfo - Basic patient info for context
  * @returns {Promise<object>} { transcript, detectedLanguage, summary }
  */
-async function processConsultationAudio(audioUrl, patientInfo = {}) {
-  const systemPrompt = `You are a medical AI assistant working in an Indian hospital. 
-You will receive an audio recording URL of a doctor-patient consultation. The patient may speak in Hindi, Tamil, Telugu, Bengali, Marathi, Kannada, Gujarati, Malayalam, or English.
+async function processConsultationAudio(audioBuffer, audioUrl, patientInfo = {}) {
+  // Step 1: Transcribe audio with Whisper (scribe model)
+  console.log('🎤 Transcribing audio with Whisper (scribe)...');
+  const transcript = await transcribeAudio(audioBuffer);
+  console.log('✅ Transcription complete:', transcript.substring(0, 100) + '...');
 
-Your task:
-1. Transcribe the audio conversation accurately
-2. Detect the language(s) spoken
-3. Generate a structured clinical summary in English
-
-Respond ONLY with valid JSON in this exact format:
-{
-  "transcript": "Full transcription in the original language(s)",
-  "detectedLanguage": "Primary language detected (e.g., Hindi, Tamil, English)",
-  "summary": {
-    "symptoms": ["symptom1", "symptom2"],
-    "diagnosis": "Brief diagnosis or suspected condition",
-    "clinicalNotes": "Detailed clinical notes from the consultation",
-    "prescriptions": [
-      {
-        "medication": "Drug name",
-        "dosage": "e.g., 500mg",
-        "frequency": "e.g., Twice daily",
-        "duration": "e.g., 7 days"
-      }
-    ],
-    "labTests": [
-      {
-        "testName": "e.g., Complete Blood Count",
-        "instructions": "e.g., Fasting required"
-      }
-    ],
-    "followUp": "Follow-up instructions or next appointment suggestion"
-  }
-}`;
-
-  const userPrompt = `Patient Info: ${patientInfo.name ? `Name: ${patientInfo.name}, Age: ${patientInfo.age}, Gender: ${patientInfo.gender}` : 'Not provided'}
-
-Audio recording URL: ${audioUrl}
-
-Please transcribe, detect the language, and generate a structured clinical summary from this consultation audio.`;
-
-  const response = await client.chat.completions.create({
-    model: process.env.AI_MODEL_ID,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: userPrompt },
-          {
-            type: 'image_url',
-            image_url: { url: audioUrl },
-          },
-        ],
-      },
-    ],
-    temperature: 0.3,
-  });
-
-  const content = response.choices[0]?.message?.content || '';
-  
-  // Try to parse as JSON, handle markdown code blocks
-  let parsed;
-  try {
-    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    parsed = JSON.parse(jsonStr);
-  } catch (err) {
-    // If JSON parsing fails, return raw content as transcript
-    parsed = {
-      transcript: content,
+  if (!transcript.trim()) {
+    return {
+      transcript: '',
       detectedLanguage: 'Unknown',
       summary: {
         symptoms: [],
-        diagnosis: 'Unable to parse AI response',
-        clinicalNotes: content,
+        diagnosis: 'No speech detected in audio',
+        clinicalNotes: 'The audio recording did not contain detectable speech.',
         prescriptions: [],
         labTests: [],
         followUp: '',
@@ -94,7 +64,14 @@ Please transcribe, detect the language, and generate a structured clinical summa
     };
   }
 
-  return parsed;
+  // Step 2: Send transcript to Gemini for structured clinical analysis
+  console.log('🤖 Analyzing transcript with AI...');
+  const result = await processConsultationText(transcript, patientInfo);
+  
+  // Preserve the original transcript from Whisper (not the AI's version)
+  result.transcript = transcript;
+
+  return result;
 }
 
 /**

@@ -18,14 +18,14 @@ router.post('/audio', authenticate, authorizeRoles('doctor'), upload.single('aud
     const patient = await Patient.findOne({ pid: patientPid });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
-    // Upload audio to Catbox
+    // Upload audio to Catbox (for storage/reference)
     let audioUrl = '';
     if (req.file) {
       audioUrl = await uploadToCatbox(req.file.buffer, req.file.originalname || 'recording.webm');
     }
 
-    // Process with Gemini
-    const aiResult = await processConsultationAudio(audioUrl, {
+    // Transcribe with Whisper + analyze with Gemini
+    const aiResult = await processConsultationAudio(req.file.buffer, audioUrl, {
       name: patient.name, age: patient.age, gender: patient.gender,
     });
 
