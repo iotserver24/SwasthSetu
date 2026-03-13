@@ -76,8 +76,8 @@ export default function Navbar() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {user ? (
-            <>
-              <div style={{
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="desktop-nav" style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
                 padding: '6px 14px', borderRadius: 'var(--radius-md)',
                 background: 'var(--bg-glass)', border: '1px solid var(--border-color)'
@@ -88,10 +88,20 @@ export default function Navbar() {
                   {user.role}
                 </span>
               </div>
-              <button onClick={logout} className="btn btn-secondary btn-sm" style={{ padding: '8px' }}>
+              <button 
+                onClick={() => setMobileOpen(!mobileOpen)} 
+                className="mobile-toggle"
+                style={{
+                  display: 'none', background: 'none', border: 'none', color: 'var(--text-primary)',
+                  cursor: 'pointer', fontSize: '1.5rem', padding: '8px',
+                }}
+              >
+                {mobileOpen ? <FiX /> : <FiMenu />}
+              </button>
+              <button onClick={logout} className="btn btn-secondary btn-sm desktop-nav" style={{ padding: '8px' }}>
                 <FiLogOut size={16} />
               </button>
-            </>
+            </div>
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               <Link href="/login" className="btn btn-secondary btn-sm">Login</Link>
@@ -101,10 +111,79 @@ export default function Navbar() {
         </div>
       </div>
 
+      {/* Mobile Menu Overlay */}
+      {user && mobileOpen && (
+        <div style={{
+          position: 'fixed', top: '72px', left: 0, right: 0, bottom: 0,
+          background: 'var(--bg-primary)', // Use solid background
+          zIndex: 1001, padding: '24px',
+          display: 'flex', flexDirection: 'column', gap: '8px',
+          animation: 'fadeIn 0.2s ease-out',
+          overflowY: 'auto'
+        }}>
+          <div style={{ 
+            display: 'flex', alignItems: 'center', gap: '12px', 
+            padding: '16px', borderRadius: 'var(--radius-md)',
+            background: 'var(--bg-glass)', border: '1px solid var(--border-color)',
+            marginBottom: '12px'
+          }}>
+            <div style={{ width: '44px', height: '44px', background: 'var(--gradient-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FiUser color="white" size={20} />
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>
+              <span className={`badge badge-${user.role === 'doctor' ? 'ordered' : user.role === 'admin' ? 'completed' : 'pending'}`} style={{ fontSize: '0.6rem', marginTop: '4px' }}>
+                {user.role}
+              </span>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              return (
+                <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} style={{
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                  padding: '16px', borderRadius: 'var(--radius-md)',
+                  textDecoration: 'none', fontSize: '1rem', fontWeight: 500,
+                  color: isActive ? 'var(--accent-primary)' : 'var(--text-primary)',
+                  background: isActive ? 'rgba(6, 182, 212, 0.1)' : 'rgba(255,255,255,0.03)',
+                  border: '1px solid ' + (isActive ? 'var(--accent-primary)' : 'var(--border-color)'),
+                  transition: 'var(--transition)',
+                }}>
+                  <Icon size={20} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+          
+          <button onClick={logout} style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: '16px', borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--accent-danger)', background: 'rgba(239, 68, 68, 0.05)',
+            color: 'var(--accent-danger)', fontSize: '1rem', fontWeight: 600,
+            marginTop: '24px', cursor: 'pointer', fontFamily: 'inherit'
+          }}>
+            <FiLogOut size={20} />
+            Logout
+          </button>
+        </div>
+      )}
+
       <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @media (max-width: 768px) {
           .desktop-nav {
             display: none !important;
+          }
+          .mobile-toggle {
+            display: block !important;
           }
         }
       `}</style>

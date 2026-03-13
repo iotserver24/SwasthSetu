@@ -462,6 +462,12 @@ html, body {
 .recorder-wave span:nth-child(5) { animation-delay: 0.4s; }
 
 /* ─── Responsive ─── */
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 0 16px;
@@ -470,12 +476,106 @@ html, body {
     grid-template-columns: repeat(2, 1fr);
   }
   .page-title {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
+  }
+  .page-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  /* Form Layouts */
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Tables */
+  .table th, .table td {
+    padding: 12px;
+    font-size: 0.8rem;
+  }
+  
+  .glass-card {
+    padding: 20px !important;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .page-header {
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  
+  .table-wrapper {
+    margin: 0 -16px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .form-row {
+    gap: 12px;
   }
 }
 
 @media (max-width: 480px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
+  .flex-responsive {
+    flex-direction: column;
+    width: 100%;
   }
+
+  .flex-responsive > * {
+    width: 100% !important;
+  }
+  
+  .container {
+    padding: 0 12px;
+  }
+}
+
+/* ─── Extra Classes ─── */
+.mt-4 { margin-top: 16px; }
+.mb-4 { margin-bottom: 16px; }
+.p-4 { padding: 16px; }
+.w-full { width: 100%; }
+.text-center { text-align: center; }
+
+/* ─── Extra Polish ─── */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
