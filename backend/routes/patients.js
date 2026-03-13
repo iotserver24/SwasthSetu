@@ -15,19 +15,26 @@ router.post('/', authenticate, authorizeRoles('doctor', 'admin'), logAudit('CREA
   }
 });
 
-// List / search patients
+// Search patients — requires search query (no open listing)
 router.get('/', authenticate, logAudit('VIEW', 'Patient'), async (req, res) => {
   try {
     const { search, page = 1, limit = 20 } = req.query;
-    const query = {};
-    if (search) {
-      query.$or = [
+
+    // Require a search term — no browsing all patients
+    if (!search || search.trim().length < 2) {
+      const total = await Patient.countDocuments();
+      return res.json({ patients: [], total, page: 1, totalPages: 0 });
+    }
+
+    const query = {
+      $or: [
         { name: { $regex: search, $options: 'i' } },
         { pid: { $regex: search, $options: 'i' } },
         { phone: { $regex: search, $options: 'i' } },
-      ];
-    }
+      ],
+    };
     const patients = await Patient.find(query)
+      .select('pid name age gender phone createdAt')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));

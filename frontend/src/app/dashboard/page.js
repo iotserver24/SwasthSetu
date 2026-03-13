@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { FiUsers, FiActivity, FiFileText, FiSearch, FiPlus, FiCheckCircle, FiClock, FiPackage } from 'react-icons/fi';
+import { FiUsers, FiActivity, FiFileText, FiSearch, FiPlus, FiCheckCircle, FiClock } from 'react-icons/fi';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -13,6 +13,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [items, setItems] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [pidSearch, setPidSearch] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -26,12 +29,8 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     try {
       if (user.role === 'doctor') {
-        const [patientsRes, consultsRes] = await Promise.all([
-          api.get('/patients?limit=5'),
-          api.get('/prescriptions?limit=5'),
-        ]);
-        setStats({ patients: patientsRes.data.total || 0 });
-        setItems(patientsRes.data.patients || []);
+        const total = (await api.get('/patients?limit=1')).data.total || 0;
+        setStats({ patients: total });
       } else if (user.role === 'pharmacy') {
         const res = await api.get('/prescriptions/pending');
         setItems(res.data || []);
@@ -41,17 +40,41 @@ export default function DashboardPage() {
         setItems(res.data || []);
         setStats({ pending: res.data?.length || 0 });
       } else if (user.role === 'admin') {
-        const [patientsRes, auditRes] = await Promise.all([
-          api.get('/patients?limit=5'),
-          api.get('/audit?limit=10'),
-        ]);
-        setStats({ patients: patientsRes.data.total || 0, auditEntries: auditRes.data.total || 0 });
+        const auditRes = await api.get('/audit?limit=10');
+        const total = (await api.get('/patients?limit=1')).data.total || 0;
+        setStats({ patients: total, auditEntries: auditRes.data.total || 0 });
         setItems(auditRes.data.logs || []);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const handlePidSearch = async (e) => {
+    e.preventDefault();
+    if (!pidSearch.trim()) return;
+    setSearching(true);
+    setSearchResults(null);
+    try {
+      const { data } = await api.get(`/patients/${pidSearch.trim()}`);
+      router.push(`/patients/${data.pid}`);
+    } catch {
+      try {
+        const { data } = await api.get(`/patients?search=${pidSearch.trim()}`);
+        if (data.patients?.length === 1) {
+          router.push(`/patients/${data.patients[0].pid}`);
+        } else if (data.patients?.length > 1) {
+          setSearchResults(data.patients);
+        } else {
+          toast.error('No patient found');
+        }
+      } catch {
+        toast.error('Search failed');
+      }
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -131,18 +154,59 @@ export default function DashboardPage() {
               <div className="stat-value">{stats?.auditEntries || '...'}</div>
               <div className="stat-label">Audit Entries</div>
             </Link>
+            <Link href="/scan" className="glass-card stat-card" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="stat-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}><FiSearch /></div>
+              <div className="stat-label">Find Patient by PID</div>
+            </Link>
           </>
         )}
       </div>
 
-      {/* Items List */}
+      {/* Patient Lookup — PID search only, no listing */}
+      {(user.role === 'doctor' || user.role === 'admin') && (
+        <div className="glass-card animate-in" style={{ padding: '24px', marginBottom: '24px' }}>
+          <h3 style={{ fontWeight: 600, marginBottom: '16px' }}>🔍 Find Patient by PID</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            Enter a Patient ID, name, or phone to access their records
+          </p>
+          <form onSubmit={handlePidSearch} style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <FiSearch style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input type="text" className="form-input" style={{ paddingLeft: '40px' }}
+                placeholder="PID-000001 or patient name or phone..."
+                value={pidSearch} onChange={(e) => setPidSearch(e.target.value)} />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={searching || !pidSearch.trim()}>
+              {searching ? <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> : 'Search'}
+            </button>
+          </form>
+          {searchResults && searchResults.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                {searchResults.length} results found:
+              </p>
+              {searchResults.map((p) => (
+                <div key={p._id} onClick={() => router.push(`/patients/${p.pid}`)}
+                  style={{ padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginBottom: '8px', cursor: 'pointer', transition: 'var(--transition)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-glow)'; e.currentTarget.style.background = 'var(--bg-glass)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.background = 'transparent'; }}>
+                  <span style={{ fontWeight: 600, color: 'var(--accent-primary)', marginRight: '12px' }}>{p.pid}</span>
+                  <span>{p.name}</span>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: '8px', fontSize: '0.85rem' }}>{p.age}yrs, {p.gender}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pharmacy / Lab / Admin work items */}
       {loadingData ? (
         <div className="loading-screen" style={{ minHeight: '30vh' }}><div className="spinner" /></div>
-      ) : (
+      ) : (user.role !== 'doctor') && (
         <div className="glass-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)' }}>
             <h3 style={{ fontWeight: 600 }}>
-              {user.role === 'doctor' && 'Recent Patients'}
               {user.role === 'pharmacy' && 'Pending Prescriptions'}
               {user.role === 'lab' && 'Pending Lab Tests'}
               {user.role === 'admin' && 'Recent Audit Logs'}
@@ -155,22 +219,12 @@ export default function DashboardPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    {user.role === 'doctor' && <><th>PID</th><th>Name</th><th>Age</th><th>Gender</th><th>Action</th></>}
                     {user.role === 'pharmacy' && <><th>Patient</th><th>Doctor</th><th>Medications</th><th>Status</th><th>Action</th></>}
                     {user.role === 'lab' && <><th>Patient</th><th>Test</th><th>Ordered By</th><th>Status</th><th>Action</th></>}
                     {user.role === 'admin' && <><th>User</th><th>Action</th><th>Resource</th><th>Time</th></>}
                   </tr>
                 </thead>
                 <tbody>
-                  {user.role === 'doctor' && items.map((p) => (
-                    <tr key={p._id}>
-                      <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{p.pid}</td>
-                      <td>{p.name}</td>
-                      <td>{p.age}</td>
-                      <td style={{ textTransform: 'capitalize' }}>{p.gender}</td>
-                      <td><Link href={`/patients/${p.pid}`} className="btn btn-secondary btn-sm">View</Link></td>
-                    </tr>
-                  ))}
                   {user.role === 'pharmacy' && items.map((rx) => (
                     <tr key={rx._id}>
                       <td>
