@@ -9,6 +9,7 @@ import patientRoutes from "./routes/patientRoutes.js";
 import consultationRoutes from "./routes/consultationRoutes.js";
 import labRoutes from "./routes/labRoutes.js";
 import pharmacyRoutes from "./routes/pharmacyRoutes.js";
+import auditRoutes from "./routes/auditRoutes.js";
 
 dotenv.config();
 
@@ -28,6 +29,7 @@ app.use("/patient", requireAuth, patientRoutes);
 app.use("/consultation", requireAuth, consultationRoutes);
 app.use("/lab", requireAuth, labRoutes);
 app.use("/pharmacy", requireAuth, pharmacyRoutes);
+app.use("/audit", requireAuth, auditRoutes);
 
 app.use((_req, res) => res.status(404).json({ success: false, message: "Route not found" }));
 

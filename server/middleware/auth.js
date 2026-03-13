@@ -10,6 +10,7 @@ export function requireAuth(req, res, next) {
 
   try {
     req.hospital = verifyToken(token);
+    req.actorId = req.hospital?.hospitalId || null;
     next();
   } catch {
     return res.status(401).json({ success: false, message: "Session expired. Please log in again." });

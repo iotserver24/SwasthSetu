@@ -1,4 +1,5 @@
 import { createPatient, getPatientById } from "../services/patientService.js";
+import { recordAccess } from "../services/auditService.js";
 
 export async function createPatientHandler(req, res) {
   try {
@@ -20,6 +21,9 @@ export async function getPatientHandler(req, res) {
     if (!patient) {
       return res.status(404).json({ success: false, message: "Patient not found" });
     }
+    recordAccess({ actorId: req.actorId, patientId: patient.patientId }).catch((err) => {
+      console.error("Audit log failed:", err.message);
+    });
     return res.json({ success: true, data: patient });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
