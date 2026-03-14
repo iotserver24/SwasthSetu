@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -18,9 +18,7 @@ export default function AuditPage() {
     if (!authLoading && (!user || user.role !== 'admin')) router.push('/dashboard');
   }, [user, authLoading, router]);
 
-  useEffect(() => { if (user?.role === 'admin') loadLogs(); }, [user, page, filters]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: 30 });
@@ -31,7 +29,9 @@ export default function AuditPage() {
       setTotal(data.total || 0);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  };
+  }, [page, filters]);
+
+  useEffect(() => { if (user?.role === 'admin') loadLogs(); }, [user, loadLogs]);
 
   if (authLoading) return <div className="loading-screen"><div className="spinner" /></div>;
 

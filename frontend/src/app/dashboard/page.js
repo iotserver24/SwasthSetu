@@ -1,7 +1,7 @@
 'use client';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -21,12 +21,7 @@ export default function DashboardPage() {
     if (!authLoading && !user) router.push('/login');
   }, [user, authLoading, router]);
 
-  useEffect(() => {
-    if (!user) return;
-    loadDashboard();
-  }, [user]);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       const isPharmacy = user.role === 'pharmacy' || user.role === 'pharmacist';
       const isLab = user.role === 'lab' || user.role === 'lab_tech';
@@ -53,7 +48,12 @@ export default function DashboardPage() {
     } finally {
       setLoadingData(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    loadDashboard();
+  }, [user, loadDashboard]);
 
   const handlePidSearch = async (e) => {
     e.preventDefault();

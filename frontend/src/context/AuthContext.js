@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 
@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
     const savedUser = localStorage.getItem('user');
     if (token && savedUser) {
       try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setUser(JSON.parse(savedUser));
       } catch {
         localStorage.removeItem('token');
@@ -25,38 +26,46 @@ export function AuthProvider({ children }) {
   }, []);
 
   /** Set auth state (token + user) after professional registration or OTP login */
-  const setAuth = (token, userData) => {
+  const setAuth = useCallback((token, userData) => {
     if (token) localStorage.setItem('token', token);
     if (userData) {
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
     }
-  };
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('lastActivity');
+    setUser(null);
+    router.push('/login');
+  }, [router]);
 
   /** Admin/Professional login (email + password) */
-  const loginAdmin = async (email, password) => {
+  const loginAdmin = useCallback(async (email, password) => {
     const { data } = await api.post('/auth/login-admin', { email, password });
     setAuth(data.token, data.user);
     return data.user;
-  };
+  }, [setAuth]);
 
   /** Professional OTP login - step 2: verify OTP and get token */
-  const verifyLoginOtp = async (email, otp) => {
+  const verifyLoginOtp = useCallback(async (email, otp) => {
     const { data } = await api.post('/auth/verify-login', { email, otp });
     setAuth(data.token, data.user);
     return data.user;
-  };
+  }, [setAuth]);
 
   /** Legacy alias: login with email/password (admin only) */
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     return loginAdmin(email, password);
-  };
+  }, [loginAdmin]);
 
-  const register = async (name, email, password) => {
+  const register = useCallback(async (name, email, password) => {
     const { data } = await api.post('/auth/register', { name, email, password });
     setAuth(data.token, data.user);
     return data.user;
-  };
+  }, [setAuth]);
 
   /** --- Session Management (Inactivity Timeout) --- **/
   
@@ -92,15 +101,7 @@ export function AuthProvider({ children }) {
       events.forEach(e => window.removeEventListener(e, updateActivity));
       clearInterval(intervalId);
     };
-  }, [user]);
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('lastActivity');
-    setUser(null);
-    router.push('/login');
-  };
+  }, [user, logout]);
 
   return (
     <AuthContext.Provider

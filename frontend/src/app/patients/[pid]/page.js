@@ -1,6 +1,6 @@
 'use client';
 import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -25,9 +25,9 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     if (pid && user) loadData();
-  }, [pid, user]);
+  }, [pid, user, loadData]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [pRes, cRes, rxRes, ltRes, qrRes] = await Promise.all([
         api.get(`/patients/${pid}`),
@@ -46,7 +46,7 @@ export default function PatientDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pid]);
 
   const handleDownloadQr = () => {
     if (!qr) return;
@@ -132,6 +132,7 @@ export default function PatientDetailPage() {
         {qr && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <div style={{ background: 'white', borderRadius: 'var(--radius-md)', padding: '8px' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr} alt="QR" style={{ width: '100px', height: '100px' }} />
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -257,7 +258,7 @@ export default function PatientDetailPage() {
                           <FiVolume2 style={{ marginRight: '6px' }} /> Play Audio
                         </button>
                       </div>
-                      <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', fontStyle: 'italic' }}>"{c.aiSummary.translatedInstructions.text}"</p>
+                      <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', fontStyle: 'italic' }}>&quot;{c.aiSummary.translatedInstructions.text}&quot;</p>
                     </div>
                   )}
                 </div>

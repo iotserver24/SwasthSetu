@@ -84,10 +84,11 @@ export default function RegisterPatientPage() {
             background: 'white', borderRadius: 'var(--radius-md)', padding: '16px',
             display: 'inline-block', marginBottom: '24px',
           }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qrData.qr} alt="Patient QR Code" style={{ width: '200px', height: '200px' }} />
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            Scan this QR code to access the patient's records instantly
+            Scan this QR code to access the patient&apos;s records instantly
           </p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
             <button className="btn btn-secondary btn-sm" onClick={handleDownloadQr}><FiDownload /> Download</button>
