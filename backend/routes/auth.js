@@ -4,12 +4,24 @@ const { authenticate, requireRole, checkLicenseStatus } = require('../middleware
 
 // ─── Professional Registration Flow ────────────────────────────────────────────────
 
-// POST /api/auth/register-professional
+// POST /api/auth/send-registration-otp
+// Step 2 of registration: validate form data, send OTP to email
+router.post('/send-registration-otp', authController.sendRegistrationOtp);
+
+// POST /api/auth/verify-registration-otp
+// Step 3 of registration: verify OTP, create account, delete OTP
+router.post('/verify-registration-otp', authController.verifyRegistrationOtp);
+
+// POST /api/auth/resend-registration-otp
+// Resend registration OTP (1-min cooldown enforced)
+router.post('/resend-registration-otp', authController.resendRegistrationOtp);
+
+// POST /api/auth/register-professional (legacy - kept for compatibility)
 // Initiate professional registration (sends OTP)
 router.post('/register-professional', authController.initiateRegistration);
 
 // POST /api/auth/verify-registration
-// Verify OTP and complete registration
+// Verify OTP and complete registration (legacy)
 router.post('/verify-registration', authController.verifyRegistration);
 
 // ─── Professional Login Flow ──────────────────────────────────────────────────────

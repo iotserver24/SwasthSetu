@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const OTP_TTL_SECONDS = 600; // 10 minutes
+
 const otpSchema = new mongoose.Schema({
   email: {
     type: String,
@@ -17,24 +19,29 @@ const otpSchema = new mongoose.Schema({
     enum: ['registration', 'login'],
     required: true,
   },
-  registryId: {
-    type: String,
-  },
-  userData: {
+  // For registration: hold the pending user payload so we can create the user after verification
+  pendingUserData: {
     type: mongoose.Schema.Types.Mixed,
   },
+  // For login (legacy flow)
+  registryId: { type: String },
+  userData: { type: mongoose.Schema.Types.Mixed },
   attempts: {
     type: Number,
     default: 0,
   },
+  sentAt: {
+    type: Date,
+    default: Date.now,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: 300, // Auto-delete after 5 minutes
+    expires: OTP_TTL_SECONDS, // Auto-delete after 10 minutes
   },
 });
 
 // TTL index for auto-deletion
-otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 300 });
+otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: OTP_TTL_SECONDS });
 
 module.exports = mongoose.model('Otp', otpSchema);

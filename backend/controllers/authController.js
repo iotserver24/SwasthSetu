@@ -497,4 +497,143 @@ module.exports = {
   getCurrentUser,
   logout,
   checkRegistry,
+  sendRegistrationOtp,
+  verifyRegistrationOtp,
+  resendRegistrationOtp,
 };
+
+/**
+ * POST /auth/send-registration-otp
+ * Step 2 of the new registration flow.
+ * Validates email + password, checks registry uniqueness, and dispatches OTP.
+ * Stores all pending user data in the Otp record so we can create the user after verification.
+ */
+async function sendRegistrationOtp(req, res) {
+  try {
+    const { name, registryId, email, password } = req.body;
+
+    if (!name || !registryId || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const normalizedEmail    = email.toLowerCase().trim();
+    const normalizedRegistry = registryId.toUpperCase().trim();
+
+    // Ensure email is not already registered
+    const emailExists = await User.findOne({ email: normalizedEmail });
+    if (emailExists) return res.status(400).json({ error: 'This email is already registered.' });
+
+    // Ensure registry ID is not already registered
+    const registryExists = await User.findOne({ registryId: normalizedRegistry });
+    if (registryExists) return res.status(400).json({ error: 'This Registry ID is already registered. Please log in.' });
+
+    // Re-verify registry with backend to get the role
+    const registryData = await require('../services/registryService').verifyRegistry(normalizedRegistry);
+    if (!registryData) return res.status(400).json({ error: 'Registry ID verification failed. Please check and try again.' });
+    if (registryData.licenseStatus !== 'ACTIVE') return res.status(400).json({ error: 'Your professional license is not ACTIVE.' });
+
+    // Hash password before storing it in the OTP record
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await otpService.sendOtp(normalizedEmail, 'registration', {
+      pendingUserData: {
+        name,
+        email: normalizedEmail,
+        hashedPassword,
+        role: registryData.role,
+        registryId: normalizedRegistry,
+        licenseStatus: 'ACTIVE',
+      },
+    });
+
+    return res.json({
+      message: 'OTP sent to your email. It expires in 10 minutes.',
+      email: normalizedEmail,
+    });
+  } catch (err) {
+    if (err.code === 'COOLDOWN') {
+      return res.status(429).json({ error: err.message, wait: err.wait });
+    }
+    console.error('[sendRegistrationOtp]', err.message);
+    return res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+  }
+}
+
+/**
+ * POST /auth/verify-registration-otp
+ * Step 3 of the new registration flow.
+ * Verifies OTP, creates the user from pendingUserData, deletes the OTP record.
+ */
+async function verifyRegistrationOtp(req, res) {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+
+    const result = await otpService.verifyOtp(email.toLowerCase().trim(), otp, 'registration');
+    if (!result.valid) return res.status(400).json({ error: result.error });
+
+    const { pendingUserData } = result;
+    if (!pendingUserData) return res.status(400).json({ error: 'Registration data not found. Please restart registration.' });
+
+    // Create the user using the pre-stored hashed password
+    const user = new (require('../models/User'))({
+      name:         pendingUserData.name,
+      email:        pendingUserData.email,
+      role:         pendingUserData.role,
+      registryId:   pendingUserData.registryId,
+      licenseStatus: 'ACTIVE',
+      lastLicenseCheck: new Date(),
+      isActive:     true,
+    });
+
+    // Directly assign hashed password (bypass schema pre-save hashing for this field)
+    user.password = pendingUserData.hashedPassword;
+    await user.save();
+
+    const token = generateToken(user);
+
+    return res.status(201).json({
+      message: 'Registration successful! Welcome to SwasthyaSetu.',
+      user: user.toJSON(),
+      token,
+    });
+  } catch (err) {
+    console.error('[verifyRegistrationOtp]', err.message);
+    if (err.code === 11000) return res.status(400).json({ error: 'Account already exists. Please log in.' });
+    return res.status(500).json({ error: 'Verification failed. Please try again.' });
+  }
+}
+
+/**
+ * POST /auth/resend-registration-otp
+ * Resend OTP for registration. The 1-min cooldown is enforced in otpService.
+ */
+async function resendRegistrationOtp(req, res) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    // Retrieve existing pendingUserData so we don't lose it on resend
+    const Otp = require('../models/Otp');
+    const existing = await Otp.findOne({ email: email.toLowerCase().trim(), purpose: 'registration' });
+    const pendingUserData = existing?.pendingUserData;
+
+    if (!pendingUserData) {
+      return res.status(400).json({ error: 'No pending registration found. Please start registration again.' });
+    }
+
+    const result = await otpService.sendOtp(email.toLowerCase().trim(), 'registration', { pendingUserData });
+
+    return res.json({ message: 'OTP resent successfully.', email: result.email });
+  } catch (err) {
+    if (err.code === 'COOLDOWN') {
+      return res.status(429).json({ error: err.message, wait: err.wait });
+    }
+    console.error('[resendRegistrationOtp]', err.message);
+    return res.status(500).json({ error: 'Failed to resend OTP.' });
+  }
+}

@@ -18,6 +18,7 @@
     "multer": "^1.4.5-lts.1",
     "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
+    "nodemailer": "^8.0.2",
     "openai": "^4.77.0",
     "qrcode": "^1.5.4",
     "sib-api-v3-sdk": "^8.5.0"
