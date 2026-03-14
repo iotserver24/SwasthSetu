@@ -28,14 +28,17 @@ export default function DashboardPage() {
 
   const loadDashboard = async () => {
     try {
+      const isPharmacy = user.role === 'pharmacy' || user.role === 'pharmacist';
+      const isLab = user.role === 'lab' || user.role === 'lab_tech';
+
       if (user.role === 'doctor') {
         const total = (await api.get('/patients?limit=1')).data.total || 0;
         setStats({ patients: total });
-      } else if (user.role === 'pharmacy') {
+      } else if (isPharmacy) {
         const res = await api.get('/prescriptions/pending');
         setItems(res.data || []);
         setStats({ pending: res.data?.length || 0 });
-      } else if (user.role === 'lab') {
+      } else if (isLab) {
         const res = await api.get('/labtests/pending');
         setItems(res.data || []);
         setStats({ pending: res.data?.length || 0 });
@@ -85,10 +88,10 @@ export default function DashboardPage() {
       <div className="page-header animate-in">
         <h1 className="page-title">
           {user.role === 'doctor' && '🩺 '}
-          {user.role === 'pharmacy' && '💊 '}
-          {user.role === 'lab' && '🔬 '}
+          {(user.role === 'pharmacy' || user.role === 'pharmacist') && '💊 '}
+          {(user.role === 'lab' || user.role === 'lab_tech') && '🔬 '}
           {user.role === 'admin' && '🛡️ '}
-          {user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard
+          {user.role === 'doctor' ? 'Doctor' : user.role === 'pharmacist' ? 'Pharmacist' : user.role === 'lab_tech' ? 'Lab Technician' : user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard
         </h1>
         <p className="page-subtitle">Welcome, {user.name}</p>
       </div>
@@ -116,7 +119,7 @@ export default function DashboardPage() {
             </div>
           </>
         )}
-        {user.role === 'pharmacy' && (
+        {(user.role === 'pharmacy' || user.role === 'pharmacist') && (
           <>
             <div className="glass-card stat-card">
               <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}><FiClock /></div>
@@ -129,7 +132,7 @@ export default function DashboardPage() {
             </Link>
           </>
         )}
-        {user.role === 'lab' && (
+        {(user.role === 'lab' || user.role === 'lab_tech') && (
           <>
             <div className="glass-card stat-card">
               <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}><FiClock /></div>
@@ -207,8 +210,8 @@ export default function DashboardPage() {
         <div className="glass-card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)' }}>
             <h3 style={{ fontWeight: 600 }}>
-              {user.role === 'pharmacy' && 'Pending Prescriptions'}
-              {user.role === 'lab' && 'Pending Lab Tests'}
+              {(user.role === 'pharmacy' || user.role === 'pharmacist') && 'Pending Prescriptions'}
+              {(user.role === 'lab' || user.role === 'lab_tech') && 'Pending Lab Tests'}
               {user.role === 'admin' && 'Recent Audit Logs'}
             </h3>
           </div>
@@ -219,13 +222,13 @@ export default function DashboardPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    {user.role === 'pharmacy' && <><th>Patient</th><th>Doctor</th><th>Medications</th><th>Status</th><th>Action</th></>}
-                    {user.role === 'lab' && <><th>Patient</th><th>Test</th><th>Ordered By</th><th>Status</th><th>Action</th></>}
+                    {(user.role === 'pharmacy' || user.role === 'pharmacist') && <><th>Patient</th><th>Doctor</th><th>Medications</th><th>Status</th><th>Action</th></>}
+                    {(user.role === 'lab' || user.role === 'lab_tech') && <><th>Patient</th><th>Test</th><th>Ordered By</th><th>Status</th><th>Action</th></>}
                     {user.role === 'admin' && <><th>User</th><th>Action</th><th>Resource</th><th>Time</th></>}
                   </tr>
                 </thead>
                 <tbody>
-                  {user.role === 'pharmacy' && items.map((rx) => (
+                  {(user.role === 'pharmacy' || user.role === 'pharmacist') && items.map((rx) => (
                     <tr key={rx._id}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{rx.patient?.name}</div>
@@ -243,7 +246,7 @@ export default function DashboardPage() {
                       </td>
                     </tr>
                   ))}
-                  {user.role === 'lab' && items.map((t) => (
+                  {(user.role === 'lab' || user.role === 'lab_tech') && items.map((t) => (
                     <tr key={t._id}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{t.patient?.name}</div>

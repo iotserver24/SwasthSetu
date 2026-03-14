@@ -16,7 +16,17 @@ const roleMenus = {
     { href: '/dashboard', label: 'Dashboard', icon: FiHome },
     { href: '/scan', label: 'QR Scan', icon: FiSearch },
   ],
+  // PR-introduced role name alias
+  pharmacist: [
+    { href: '/dashboard', label: 'Dashboard', icon: FiHome },
+    { href: '/scan', label: 'QR Scan', icon: FiSearch },
+  ],
   lab: [
+    { href: '/dashboard', label: 'Dashboard', icon: FiHome },
+    { href: '/scan', label: 'QR Scan', icon: FiSearch },
+  ],
+  // PR-introduced role name alias
+  lab_tech: [
     { href: '/dashboard', label: 'Dashboard', icon: FiHome },
     { href: '/scan', label: 'QR Scan', icon: FiSearch },
   ],
@@ -27,6 +37,20 @@ const roleMenus = {
     { href: '/scan', label: 'QR Scan', icon: FiSearch },
   ],
 };
+
+// Map a raw role string to a badge colour key
+const roleBadge = (role) => {
+  if (role === 'doctor') return 'ordered';       // blue
+  if (role === 'admin') return 'completed';       // green
+  return 'pending';                               // yellow (pharmacy/lab/etc.)
+};
+
+// Human-readable role labels
+const roleLabel = (role) => {
+  const map = { doctor: 'DOCTOR', pharmacy: 'PHARMACY', pharmacist: 'PHARMACIST', lab: 'LAB', lab_tech: 'LAB TECH', admin: 'ADMIN' };
+  return map[role] || role.toUpperCase();
+};
+
 
 export default function Navbar() {
   const { user, logout, loading } = useAuth();
@@ -85,8 +109,8 @@ export default function Navbar() {
               }}>
                 <FiUser size={14} />
                 <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>{user.name}</span>
-                <span className={`badge badge-${user.role === 'doctor' ? 'ordered' : user.role === 'admin' ? 'completed' : 'pending'}`} style={{ fontSize: '0.65rem', padding: '2px 8px' }}>
-                  {user.role}
+                <span className={`badge badge-${roleBadge(user.role)}`} style={{ fontSize: '0.65rem', padding: '2px 8px' }}>
+                  {roleLabel(user.role)}
                 </span>
               </div>
               <button 
@@ -134,8 +158,8 @@ export default function Navbar() {
             <div style={{ overflow: 'hidden' }}>
               <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>
-              <span className={`badge badge-${user.role === 'doctor' ? 'ordered' : user.role === 'admin' ? 'completed' : 'pending'}`} style={{ fontSize: '0.6rem', marginTop: '4px' }}>
-                {user.role}
+              <span className={`badge badge-${roleBadge(user.role)}`} style={{ fontSize: '0.6rem', marginTop: '4px' }}>
+                {roleLabel(user.role)}
               </span>
             </div>
           </div>
