@@ -23,10 +23,6 @@ export default function PatientDetailPage() {
     if (!authLoading && !user) router.push('/login');
   }, [user, authLoading, router]);
 
-  useEffect(() => {
-    if (pid && user) loadData();
-  }, [pid, user, loadData]);
-
   const loadData = useCallback(async () => {
     try {
       const [pRes, cRes, rxRes, ltRes, qrRes] = await Promise.all([
@@ -47,6 +43,10 @@ export default function PatientDetailPage() {
       setLoading(false);
     }
   }, [pid]);
+
+  useEffect(() => {
+    if (pid && user) loadData();
+  }, [pid, user, loadData]);
 
   const handleDownloadQr = () => {
     if (!qr) return;
