@@ -5,17 +5,11 @@ dotenv.config();
 async function findData() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    const User = mongoose.model('User', new mongoose.Schema({ email: String, role: String }));
     const Patient = mongoose.model('Patient', new mongoose.Schema({ pid: String, name: String }));
-    
-    const doctor = await User.findOne({ role: 'doctor' });
-    const patient = await Patient.findOne();
-    
-    console.log('--- DATA FOUND ---');
-    console.log('DOCTOR_EMAIL:', doctor ? doctor.email : 'NOT_FOUND');
-    console.log('PATIENT_PID:', patient ? patient.pid : 'NOT_FOUND');
+    const patients = await Patient.find({});
+    console.log('--- PATIENTS FOUND ---');
+    console.log(JSON.stringify(patients, null, 2));
     console.log('------------------');
-    
     await mongoose.disconnect();
   } catch (err) {
     console.error(err);
