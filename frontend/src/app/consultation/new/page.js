@@ -162,15 +162,17 @@ export default function NewConsultationPage() {
         targetLanguage: result.detectedLanguage,
       });
 
-      const utterance = new SpeechSynthesisUtterance(data.translatedText);
-      utterance.lang = result.aiSummary.translatedInstructions.language || 'en-US';
+      // Get audio from backend TTS proxy as a blob
+      const langCode = result.aiSummary.translatedInstructions.language || 'hi-IN';
+      const response = await api.get(`/consultations/tts?text=${encodeURIComponent(data.translatedText)}&lang=${langCode}`, {
+        responseType: 'blob'
+      });
       
-      const voices = window.speechSynthesis.getVoices();
-      const voice = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0])) || voices[0];
-      if (voice) utterance.voice = voice;
+      const audioUrl = URL.createObjectURL(response.data);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.play();
 
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
       toast.success('Advice translated and spoken!');
     } catch (err) {
       toast.error('Translation failed');

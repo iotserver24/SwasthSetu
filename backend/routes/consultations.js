@@ -25,6 +25,32 @@ router.post('/translate', authenticate, authorizeRoles('doctor'), async (req, re
   }
 });
 
+// GET /api/consultations/tts
+// Proxy Google TTS for reliable audio delivery
+router.get('/tts', authenticate, async (req, res) => {
+  try {
+    const { text, lang } = req.query;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
+
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang || 'en'}&client=tw-ob`;
+    
+    // Using simple fetch to proxy the audio stream
+    const response = await fetch(ttsUrl, {
+      headers: {
+        'Referer': 'http://translate.google.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    if (!response.ok) throw new Error('Failed to fetch TTS from provider');
+
+    res.set('Content-Type', 'audio/mpeg');
+    response.body.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Create consultation draft from audio (No DB save)
 router.post('/audio/draft', authenticate, authorizeRoles('doctor'), upload.single('audio'), async (req, res) => {
   try {
