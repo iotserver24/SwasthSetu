@@ -413,13 +413,6 @@ const loginAdmin = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (user.role !== 'admin') {
-      return res.status(403).json({
-        error: 'This endpoint is for admin accounts only',
-        hint: 'Professionals should use /auth/login with OTP',
-      });
-    }
-
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -535,15 +528,12 @@ async function sendRegistrationOtp(req, res) {
     if (!registryData) return res.status(400).json({ error: 'Registry ID verification failed. Please check and try again.' });
     if (registryData.licenseStatus !== 'ACTIVE') return res.status(400).json({ error: 'Your professional license is not ACTIVE.' });
 
-    // Hash password before storing it in the OTP record
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    console.log(`[AUTH DEBUG] Sending OTP for ${normalizedEmail}. Pending data Role: ${registryData.role}`);
     await otpService.sendOtp(normalizedEmail, 'registration', {
       pendingUserData: {
         name,
         email: normalizedEmail,
-        hashedPassword,
+        password, // Store plain password temporarily; User model will hash it on save()
         role: registryData.role,
         registryId: normalizedRegistry,
         licenseStatus: 'ACTIVE',
@@ -574,15 +564,24 @@ async function verifyRegistrationOtp(req, res) {
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
 
     const result = await otpService.verifyOtp(email.toLowerCase().trim(), otp, 'registration');
-    if (!result.valid) return res.status(400).json({ error: result.error });
+    if (!result.valid) {
+      console.log(`[AUTH DEBUG] OTP Verification failed for ${email}: ${result.error}`);
+      return res.status(400).json({ error: result.error });
+    }
 
     const { pendingUserData } = result;
+    console.log(`[AUTH DEBUG] OTP Verified. Pending User Data Found: ${!!pendingUserData}`);
+    if (pendingUserData) {
+      console.log(`[AUTH DEBUG] Pending Role: ${pendingUserData.role}, Email in payload: ${pendingUserData.email}`);
+    }
+
     if (!pendingUserData) return res.status(400).json({ error: 'Registration data not found. Please restart registration.' });
 
-    // Create the user using the pre-stored hashed password
+    // Create the user
     const user = new (require('../models/User'))({
       name:         pendingUserData.name,
       email:        pendingUserData.email,
+      password:     pendingUserData.password, // Will be hashed by User's pre-save hook
       role:         pendingUserData.role,
       registryId:   pendingUserData.registryId,
       licenseStatus: 'ACTIVE',
@@ -590,9 +589,8 @@ async function verifyRegistrationOtp(req, res) {
       isActive:     true,
     });
 
-    // Directly assign hashed password (bypass schema pre-save hashing for this field)
-    user.password = pendingUserData.hashedPassword;
     await user.save();
+    console.log(`[AUTH DEBUG] User created successfully: ${user._id}`);
 
     const token = generateToken(user);
 

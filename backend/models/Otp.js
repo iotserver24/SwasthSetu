@@ -8,7 +8,6 @@ const otpSchema = new mongoose.Schema({
     required: true,
     lowercase: true,
     trim: true,
-    index: true,
   },
   otp: {
     type: String,
@@ -41,7 +40,7 @@ const otpSchema = new mongoose.Schema({
   },
 });
 
-// TTL index for auto-deletion
-otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: OTP_TTL_SECONDS });
+// Search index for email lookup
+otpSchema.index({ email: 1 });
 
 module.exports = mongoose.model('Otp', otpSchema);

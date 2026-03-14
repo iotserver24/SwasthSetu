@@ -17,7 +17,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const isLoginPath = typeof window !== 'undefined' && (
+      window.location.pathname === '/login' ||
+      error.config?.url?.includes('/auth/login') ||
+      error.config?.url?.includes('/auth/verify-login') ||
+      error.config?.url?.includes('/auth/login-admin')
+    );
+
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !isLoginPath) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

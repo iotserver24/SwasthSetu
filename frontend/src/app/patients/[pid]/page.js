@@ -52,7 +52,7 @@ export default function PatientDetailPage() {
     if (!qr) return;
     const link = document.createElement('a');
     link.href = qr;
-    link.download = `patient-qr-${patient.pid}.png`;
+    link.download = `${patient.pid}-${patient.name}.png`;
     link.click();
   };
 

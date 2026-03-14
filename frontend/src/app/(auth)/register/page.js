@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { FiUser, FiShield, FiMail, FiLock, FiCheckCircle, FiArrowRight, FiRotateCcw, FiBriefcase } from 'react-icons/fi';
 
 const REGISTRY_PREFIXES = {
@@ -22,6 +23,7 @@ const STEPS = ['Verify Identity', 'Account Setup', 'Email OTP'];
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { setAuth } = useAuth();
 
   const [step, setStep] = useState(1);
   const [verifying, setVerifying]   = useState(false);
@@ -102,9 +104,9 @@ export default function RegisterPage() {
     try {
       const { data } = await api.post('/auth/verify-registration-otp', { email, otp: otpValue });
       if (data.token) {
-        localStorage.setItem('token', data.token);
+        setAuth(data.token, data.user);
         toast.success('Account created! Welcome 🎉');
-        window.location.href = '/dashboard';
+        router.push('/dashboard');
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Invalid OTP. Please try again.');

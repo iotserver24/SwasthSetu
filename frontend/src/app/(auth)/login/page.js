@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { FiMail, FiLock, FiLogIn } from 'react-icons/fi';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { loginAdmin } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
@@ -17,11 +17,14 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const user = await login(form.email, form.password);
-      toast.success(`Welcome back, ${user.name}!`);
-      router.push('/dashboard');
+      const userData = await loginAdmin(form.email, form.password);
+      if (userData) {
+        toast.success(`Welcome back, ${userData.name}!`);
+        router.replace('/dashboard');
+      }
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Login failed');
+      console.error('[Login Error]', err.response?.data?.error || err.message);
+      toast.error(err.response?.data?.error || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

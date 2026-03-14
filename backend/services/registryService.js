@@ -51,6 +51,22 @@ const MOCK_REGISTRY_DATABASE = {
     suspensionReason: 'Pending investigation',
     registry: 'NMC',
   },
+  'NMC555666': {
+    name: 'Dr Ananya Iyer',
+    role: 'doctor',
+    licenseStatus: 'ACTIVE',
+    specialization: 'Pediatrics',
+    registrationDate: '2020-11-05',
+    registry: 'NMC',
+  },
+  'NMC111222': {
+    name: 'Dr Arjun Mehra',
+    role: 'doctor',
+    licenseStatus: 'ACTIVE',
+    specialization: 'Neurology',
+    registrationDate: '2012-09-30',
+    registry: 'NMC',
+  },
 
   // Pharmacists (PCI)
   'PCI123456': {
@@ -69,6 +85,13 @@ const MOCK_REGISTRY_DATABASE = {
     registrationDate: '2020-01-28',
     registry: 'PCI',
   },
+  'PCI444555': {
+    name: 'Rahul Varma',
+    role: 'pharmacist',
+    licenseStatus: 'ACTIVE',
+    qualification: 'M.Pharm',
+    registry: 'PCI',
+  },
 
   // Lab Technicians (PMC)
   'PMC123456': {
@@ -85,6 +108,13 @@ const MOCK_REGISTRY_DATABASE = {
     licenseStatus: 'ACTIVE',
     qualification: 'B.Sc MLT',
     registrationDate: '2022-02-20',
+    registry: 'PMC',
+  },
+  'PMC999000': {
+    name: 'Deepak Joshi',
+    role: 'lab',
+    licenseStatus: 'ACTIVE',
+    qualification: 'DMLT',
     registry: 'PMC',
   },
   'PMC345678': {

@@ -46,7 +46,7 @@ export default function RegisterPatientPage() {
     if (!qrData?.qr) return;
     const link = document.createElement('a');
     link.href = qrData.qr;
-    link.download = `patient-qr-${qrData.pid}.png`;
+    link.download = `${qrData.pid}-${qrData.name}.png`;
     link.click();
   };
 

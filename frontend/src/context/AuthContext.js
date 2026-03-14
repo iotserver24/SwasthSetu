@@ -33,12 +33,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  /** Admin login (email + password) */
+  /** Admin/Professional login (email + password) */
   const loginAdmin = async (email, password) => {
     const { data } = await api.post('/auth/login-admin', { email, password });
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    setUser(data.user);
+    setAuth(data.token, data.user);
     return data.user;
   };
 

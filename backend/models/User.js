@@ -71,9 +71,8 @@ const userSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// Indexes
-userSchema.index({ registryId: 1 }, { unique: true, sparse: true });
-userSchema.index({ email: 1 }, { unique: true });
+// Role-based indexes for common queries
+userSchema.index({ role: 1 });
 
 // Pre-save hook for password hashing
 userSchema.pre('save', async function (next) {

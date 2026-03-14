@@ -60,7 +60,9 @@ function buildHtml(otp, purpose) {
 
 async function dispatchEmail(email, otp, purpose) {
   const transporter = createTransporter();
-  const from = `"SwasthyaSetu" <${process.env.SMTP_USER || 'noreply@swasthyasetu.com'}>`;
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+  const fromName = process.env.SMTP_FROM_NAME || 'SwasthyaSetu';
+  const from = `"${fromName}" <${fromEmail}>`;
 
   if (!transporter) {
     // Dev fallback — log to console
@@ -71,15 +73,24 @@ async function dispatchEmail(email, otp, purpose) {
     return;
   }
 
-  await transporter.sendMail({
-    from,
-    to: email,
-    subject: `SwasthyaSetu – Your ${purpose === 'registration' ? 'Registration' : 'Login'} Code: ${otp}`,
-    text: `Your SwasthyaSetu verification code is: ${otp}\nExpires in 10 minutes.`,
-    html: buildHtml(otp, purpose),
-  });
+  try {
+    const info = await transporter.sendMail({
+      from,
+      to: email,
+      subject: `SwasthyaSetu – Your ${purpose === 'registration' ? 'Registration' : 'Login'} Code: ${otp}`,
+      text: `Your SwasthyaSetu verification code is: ${otp}\nExpires in 10 minutes.`,
+      html: buildHtml(otp, purpose),
+    });
 
-  console.log(`[OTP] Email sent to ${email}`);
+    console.log(`[OTP] Email sent to ${email}. MessageID: ${info.messageId}`);
+    if (info.rejected.length > 0) {
+      console.warn(`[OTP] Email rejected for: ${info.rejected.join(', ')}`);
+    }
+  } catch (err) {
+    console.error(`[OTP] Failed to send email to ${email}:`, err.message);
+    // Log code to console as fallback so the user isn't stuck during testing
+    console.log(`[OTP FALLBACK] ${purpose.toUpperCase()} code for ${email}: ${otp}`);
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -114,6 +125,7 @@ async function sendOtp(email, purpose, options = {}) {
   const now      = new Date();
   const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MS);
 
+  console.log(`[OTP DEBUG] Creating OTP record for ${normalized}. Pending data keys: ${options.pendingUserData ? Object.keys(options.pendingUserData) : 'none'}`);
   await Otp.create({
     email: normalized,
     otp,
