@@ -52,16 +52,52 @@ export function AuthProvider({ children }) {
     return loginAdmin(email, password);
   };
 
-  /** Legacy: register with email/password (admin only) */
   const register = async (name, email, password) => {
     const { data } = await api.post('/auth/register', { name, email, password });
     setAuth(data.token, data.user);
     return data.user;
   };
 
+  /** --- Session Management (Inactivity Timeout) --- **/
+  
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+    const CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
+
+    const updateActivity = () => {
+      localStorage.setItem('lastActivity', Date.now().toString());
+    };
+
+    const checkInactivity = () => {
+      const lastActivity = parseInt(localStorage.getItem('lastActivity') || '0', 10);
+      if (lastActivity && Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
+        console.log('[Auth] Session timed out due to inactivity');
+        logout();
+      }
+    };
+
+    // Initialize lastActivity if not present
+    if (!localStorage.getItem('lastActivity')) updateActivity();
+
+    // Listen for common user interactions
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(e => window.addEventListener(e, updateActivity, { passive: true }));
+
+    // Periodic check for timeout
+    const intervalId = setInterval(checkInactivity, CHECK_INTERVAL);
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, updateActivity));
+      clearInterval(intervalId);
+    };
+  }, [user]);
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('lastActivity');
     setUser(null);
     router.push('/login');
   };
