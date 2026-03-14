@@ -352,7 +352,7 @@ const resendOtp = async (req, res) => {
  */
 const registerAdmin = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role, registryId } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -365,11 +365,22 @@ const registerAdmin = async (req, res) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
+    // If a registryId is supplied, ensure it isn't already taken
+    if (registryId) {
+      const existingRegistry = await User.findOne({ registryId: registryId.toUpperCase() });
+      if (existingRegistry) {
+        return res.status(400).json({ error: 'This Registry ID is already registered.' });
+      }
+    }
+
+    const assignedRole = role || 'admin';
+
     const user = await User.create({
       name,
       email: normalizedEmail,
       password,
-      role: 'admin',
+      role: assignedRole,
+      registryId: registryId ? registryId.toUpperCase() : undefined,
       isActive: true,
       licenseStatus: 'ACTIVE',
     });
