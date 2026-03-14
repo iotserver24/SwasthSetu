@@ -14,7 +14,24 @@ const { startLicenseMonitor } = require('./services/licenseMonitor');
 const app = express();
 
 // ─── Middleware ──────────────────────────────────────────────────────────────────
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:3001', credentials: true }));
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://swasth-setu-orcin.vercel.app',
+  process.env.CLIENT_ORIGIN
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
