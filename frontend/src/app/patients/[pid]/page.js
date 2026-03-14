@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { FiUser, FiPhone, FiMail, FiMapPin, FiHeart, FiActivity, FiFileText, FiPackage, FiDownload, FiPrinter } from 'react-icons/fi';
+import { FiUser, FiPhone, FiMail, FiMapPin, FiHeart, FiActivity, FiFileText, FiPackage, FiDownload, FiPrinter, FiVolume2 } from 'react-icons/fi';
 
 export default function PatientDetailPage() {
   const { pid } = useParams();
@@ -73,6 +73,22 @@ export default function PatientDetailPage() {
     printWindow.focus();
     printWindow.print();
     setTimeout(() => printWindow.close(), 500);
+  };
+
+  const playAudio = (text, lang) => {
+    if (!('speechSynthesis' in window)) {
+      toast.error('Text-to-speech not supported in this browser.');
+      return;
+    }
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang || 'en-US';
+    // Slightly slower rate for clarity
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
+    toast.success('Playing audio instructions...', { icon: '🔊' });
   };
 
   if (loading || authLoading) return <div className="loading-screen"><div className="spinner" /></div>;
@@ -227,6 +243,21 @@ export default function PatientDetailPage() {
                   {c.aiSummary.followUp && (
                     <div style={{ gridColumn: 'span 2' }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Follow-up</div>
                       <p style={{ fontSize: '0.9rem' }}>{c.aiSummary.followUp}</p>
+                    </div>
+                  )}
+                  {c.aiSummary.translatedInstructions?.text && (
+                    <div style={{ gridColumn: 'span 2', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', textTransform: 'uppercase', fontWeight: 600 }}>Message for Patient ({c.aiSummary.translatedInstructions.language})</div>
+                        <button 
+                          className="btn btn-primary btn-sm" 
+                          onClick={() => playAudio(c.aiSummary.translatedInstructions.text, c.aiSummary.translatedInstructions.language)}
+                          style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                        >
+                          <FiVolume2 style={{ marginRight: '6px' }} /> Play Audio
+                        </button>
+                      </div>
+                      <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', fontStyle: 'italic' }}>"{c.aiSummary.translatedInstructions.text}"</p>
                     </div>
                   )}
                 </div>

@@ -22,6 +22,10 @@ const consultationSchema = new mongoose.Schema({
       instructions: String,
     }],
     followUp: { type: String },
+    translatedInstructions: {
+      text: { type: String },
+      language: { type: String }
+    }
   },
   status: {
     type: String,

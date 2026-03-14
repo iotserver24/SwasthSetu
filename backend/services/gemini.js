@@ -110,7 +110,11 @@ Respond ONLY with valid JSON in this exact format:
         "instructions": "e.g., Fasting required"
       }
     ],
-    "followUp": "Follow-up instructions"
+    "followUp": "Follow-up instructions",
+    "translatedInstructions": {
+      "text": "A friendly summary of the diagnosis, prescriptions, and follow-up, translated directly into the detectedLanguage (e.g. Hindi, Tamil). Talk directly to the patient.",
+      "language": "ISO language code of detectedLanguage (e.g. 'hi-IN', 'ta-IN', 'en-US')"
+    }
   }
 }`;
 
@@ -143,6 +147,10 @@ Respond ONLY with valid JSON in this exact format:
         prescriptions: [],
         labTests: [],
         followUp: '',
+        translatedInstructions: {
+          text: '',
+          language: 'en-US'
+        }
       },
     };
   }
