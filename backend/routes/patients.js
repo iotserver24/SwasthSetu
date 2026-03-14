@@ -70,4 +70,27 @@ router.get('/:pid/qr', authenticate, logAudit('VIEW', 'Patient'), async (req, re
   }
 });
 
+// Update patient details
+router.put('/:pid', authenticate, authorizeRoles('doctor', 'admin'), logAudit('UPDATE', 'Patient'), async (req, res) => {
+  try {
+    const { pid } = req.params;
+    const updateData = { ...req.body };
+    
+    // Don't allow PID or registeredBy to be updated manually
+    delete updateData.pid;
+    delete updateData.registeredBy;
+
+    const patient = await Patient.findOneAndUpdate(
+      { pid },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+    res.json(patient);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

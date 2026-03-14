@@ -1,11 +1,12 @@
 'use client';
 import { useParams } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { FiUser, FiPhone, FiMail, FiMapPin, FiHeart, FiActivity, FiFileText, FiPackage, FiDownload, FiPrinter, FiVolume2 } from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import { FiUser, FiPhone, FiMail, FiMapPin, FiHeart, FiActivity, FiFileText, FiPackage, FiDownload, FiPrinter, FiVolume2, FiEdit, FiPlus, FiX, FiCheck, FiMic, FiMicOff, FiSend, FiMessageSquare } from 'react-icons/fi';
 
 export default function PatientDetailPage() {
   const { pid } = useParams();
@@ -18,6 +19,26 @@ export default function PatientDetailPage() {
   const [qr, setQr] = useState(null);
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+
+  // Modals
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showConsultModal, setShowConsultModal] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+
+  // Consultation states
+  const [consultStep, setConsultStep] = useState(1); // 1=Record/Type, 2=Review/Save
+  const [consultMode, setConsultMode] = useState('voice');
+  const [recording, setRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [timer, setTimer] = useState(0);
+  const [textInput, setTextInput] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [consultResult, setConsultResult] = useState(null);
+  const [editableJson, setEditableJson] = useState('');
+
+  const mediaRecorder = useRef(null);
+  const timerRef = useRef(null);
+  const chunks = useRef([]);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -37,6 +58,12 @@ export default function PatientDetailPage() {
       setPrescriptions(rxRes.data);
       setLabTests(ltRes.data);
       setQr(qrRes.data.qr);
+      // Initialize edit form when patient is loaded
+      setEditForm({
+        ...pRes.data,
+        allergies: pRes.data.allergies?.join(', ') || '',
+        languages: pRes.data.languages?.join(', ') || '',
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,6 +74,109 @@ export default function PatientDetailPage() {
   useEffect(() => {
     if (pid && user) loadData();
   }, [pid, user, loadData]);
+
+  // ─── Actions ───────────────────────────────────────────────────────────────
+  
+  const handleUpdatePatient = async (e) => {
+    e.preventDefault();
+    setProcessing(true);
+    try {
+      const payload = {
+        ...editForm,
+        allergies: editForm.allergies ? editForm.allergies.split(',').map(s => s.trim()) : [],
+        languages: editForm.languages ? editForm.languages.split(',').map(s => s.trim()) : [],
+      };
+      await api.put(`/patients/${pid}`, payload);
+      toast.success('Patient information updated!');
+      setShowEditModal(false);
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Update failed');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      chunks.current = [];
+      mediaRecorder.current.ondataavailable = (e) => { if (e.data.size > 0) chunks.current.push(e.data); };
+      mediaRecorder.current.onstop = () => {
+        const blob = new Blob(chunks.current, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorder.current.start();
+      setRecording(true);
+      setTimer(0);
+      timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+    } catch (err) { toast.error('Microphone access denied'); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') mediaRecorder.current.stop();
+    setRecording(false);
+    clearInterval(timerRef.current);
+  };
+
+  const submitConsultAudio = async () => {
+    if (!audioBlob) return toast.error('No recording found');
+    setProcessing(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('patientPid', pid);
+      const { data } = await api.post('/consultations/audio/draft', formData);
+      setConsultResult(data);
+      setEditableJson(JSON.stringify(data.aiSummary, null, 2));
+      setConsultStep(2);
+    } catch (err) { toast.error(err.response?.data?.error || 'Processing failed'); }
+    finally { setProcessing(false); }
+  };
+
+  const submitConsultText = async () => {
+    if (!textInput.trim()) return toast.error('Please enter notes');
+    setProcessing(true);
+    try {
+      const { data } = await api.post('/consultations/text/draft', { patientPid: pid, text: textInput });
+      setConsultResult(data);
+      setEditableJson(JSON.stringify(data.aiSummary, null, 2));
+      setConsultStep(2);
+    } catch (err) { toast.error(err.response?.data?.error || 'Processing failed'); }
+    finally { setProcessing(false); }
+  };
+
+  const saveFinalConsultation = async () => {
+    setProcessing(true);
+    try {
+      const finalSummary = JSON.parse(editableJson);
+      const payload = {
+        patientPid: pid,
+        audioUrl: consultResult.audioUrl,
+        transcript: consultResult.transcript,
+        detectedLanguage: consultResult.detectedLanguage,
+        aiSummary: finalSummary,
+      };
+      await api.post('/consultations/save', payload);
+      toast.success('Consultation saved!');
+      setShowConsultModal(false);
+      resetConsultation();
+      loadData();
+    } catch (err) {
+      toast.error(err instanceof SyntaxError ? 'Invalid JSON format' : (err.response?.data?.error || 'Failed to save'));
+    } finally { setProcessing(false); }
+  };
+
+  const resetConsultation = () => {
+    setConsultStep(1);
+    setAudioBlob(null);
+    setTextInput('');
+    setConsultResult(null);
+    setEditableJson('');
+    setTimer(0);
+  };
 
   const handleDownloadQr = () => {
     if (!qr) return;
@@ -129,6 +259,17 @@ export default function PatientDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={() => setShowEditModal(true)}>
+            <FiEdit /> Edit Info
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowConsultModal(true)}>
+            <FiPlus /> New Consultation
+          </button>
+        </div>
+
         {qr && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <div style={{ background: 'white', borderRadius: 'var(--radius-md)', padding: '8px' }}>
@@ -313,6 +454,126 @@ export default function PatientDetailPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Edit Patient Modal */}
+      {showEditModal && editForm && (
+        <div className="modal-overlay animate-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>✏️ Edit Patient Details</h2>
+              <button className="btn btn-secondary" style={{ padding: '8px' }} onClick={() => setShowEditModal(false)}><FiX size={20} /></button>
+            </div>
+            <form onSubmit={handleUpdatePatient}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Full Name</label>
+                  <input type="text" className="form-input" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Age</label>
+                  <input type="number" className="form-input" value={editForm.age} onChange={e => setEditForm({...editForm, age: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Gender</label>
+                  <select className="form-select" value={editForm.gender} onChange={e => setEditForm({...editForm, gender: e.target.value})}>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phone</label>
+                  <input type="text" className="form-input" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Blood Group</label>
+                  <select className="form-select" value={editForm.bloodGroup} onChange={e => setEditForm({...editForm, bloodGroup: e.target.value})}>
+                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Allergies (comma separated)</label>
+                  <input type="text" className="form-input" value={editForm.allergies} onChange={e => setEditForm({...editForm, allergies: e.target.value})} />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <h4 style={{ fontSize: '0.9rem', marginBottom: '12px', color: 'var(--text-secondary)' }}>Emergency Contact</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <input type="text" className="form-input" placeholder="Name" value={editForm.emergencyContact?.name} onChange={e => setEditForm({...editForm, emergencyContact: {...editForm.emergencyContact, name: e.target.value}})} />
+                        <input type="text" className="form-input" placeholder="Phone" value={editForm.emergencyContact?.phone} onChange={e => setEditForm({...editForm, emergencyContact: {...editForm.emergencyContact, phone: e.target.value}})} />
+                    </div>
+                </div>
+              </div>
+              <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={processing}>
+                    {processing ? 'Updating...' : <><FiCheck /> Save Changes</>}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* New Consultation Modal */}
+      {showConsultModal && (
+        <div className="modal-overlay animate-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '700px', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>🩺 {consultStep === 1 ? 'New Consultation' : 'Review AI Draft'}</h2>
+              <button className="btn btn-secondary" style={{ padding: '8px' }} onClick={() => { setShowConsultModal(false); resetConsultation(); }}><FiX size={20} /></button>
+            </div>
+
+            {consultStep === 1 ? (
+              <>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                  <button className={`btn ${consultMode === 'voice' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setConsultMode('voice')} style={{ flex: 1, justifyContent: 'center' }}>
+                    <FiMic /> Voice
+                  </button>
+                  <button className={`btn ${consultMode === 'text' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setConsultMode('text')} style={{ flex: 1, justifyContent: 'center' }}>
+                    <FiMessageSquare /> Text
+                  </button>
+                </div>
+
+                {consultMode === 'voice' ? (
+                  <div style={{ textAlign: 'center', padding: '20px' }}>
+                    {recording && <div className="recorder-timer" style={{ fontSize: '2rem', marginBottom: '20px' }}>{Math.floor(timer/60)}:{(timer%60).toString().padStart(2,'0')}</div>}
+                    <button 
+                      className={`recorder-btn ${recording ? 'recording' : 'idle'}`}
+                      style={{ margin: '0 auto 20px', width: '80px', height: '80px' }}
+                      onClick={recording ? stopRecording : startRecording}
+                    >
+                      {recording ? <FiMicOff size={32} /> : <FiMic size={32} />}
+                    </button>
+                    <p style={{ color: 'var(--text-secondary)' }}>{recording ? 'Recording... click to stop' : audioBlob ? 'captured!' : 'click to record'}</p>
+                    {audioBlob && !recording && (
+                      <button className="btn btn-primary" onClick={submitConsultAudio} style={{ width: '100%', marginTop: '24px' }} disabled={processing}>
+                        {processing ? 'Processing...' : 'Generate AI Draft'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <textarea className="form-textarea" rows={8} placeholder="Enter consultation notes..." value={textInput} onChange={e => setTextInput(e.target.value)} />
+                    <button className="btn btn-primary" onClick={submitConsultText} style={{ width: '100%', marginTop: '20px' }} disabled={processing || !textInput.trim()}>
+                      {processing ? 'Processing...' : 'Generate AI Draft'}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>
+                <textarea className="form-textarea" rows={12} style={{ fontFamily: 'monospace', fontSize: '13px' }} value={editableJson} onChange={e => setEditableJson(e.target.value)} />
+                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                  <button className="btn btn-success" onClick={saveFinalConsultation} style={{ flex: 1 }} disabled={processing}>
+                    {processing ? 'Saving...' : 'Confirm & Save'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setConsultStep(1)}>Back</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
