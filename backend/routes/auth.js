@@ -1,50 +1,69 @@
 const router = require('express').Router();
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const { authenticate } = require('../middleware/auth');
+const authController = require('../controllers/authController');
+const { authenticate, requireRole, checkLicenseStatus } = require('../middleware/auth');
 
-// Register
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
+// ─── Professional Registration Flow ────────────────────────────────────────────────
 
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ error: 'Email already registered' });
+// POST /api/auth/register-professional
+// Initiate professional registration (sends OTP)
+router.post('/register-professional', authController.initiateRegistration);
 
-    const user = await User.create({ name, email, password, role });
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+// POST /api/auth/verify-registration
+// Verify OTP and complete registration
+router.post('/verify-registration', authController.verifyRegistration);
 
-    res.status(201).json({ user, token });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// ─── Professional Login Flow ──────────────────────────────────────────────────────
 
-// Login
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+// POST /api/auth/login
+// Initiate login (sends OTP)
+router.post('/login', authController.initiateLogin);
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+// POST /api/auth/verify-login
+// Verify OTP and complete login
+router.post('/verify-login', authController.verifyLogin);
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
+// ─── OTP Management ────────────────────────────────────────────────────────────────
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ user, token });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// POST /api/auth/resend-otp
+// Resend OTP for registration or login
+router.post('/resend-otp', authController.resendOtp);
 
-// Get current user
-router.get('/me', authenticate, (req, res) => {
-  res.json(req.user);
+// ─── Admin/Legacy Routes (Email/Password) ──────────────────────────────────────────
+
+// POST /api/auth/register-admin
+// Create admin account (email/password)
+router.post('/register', authController.registerAdmin);
+
+// POST /api/auth/login-admin
+// Login admin account (email/password)
+router.post('/login-admin', authController.loginAdmin);
+
+// ─── Protected Routes ───────────────────────────────────────────────────────────
+
+// GET /api/auth/me
+// Get current authenticated user
+router.get('/me', authenticate, authController.getCurrentUser);
+
+// POST /api/auth/logout
+// Logout (client clears token)
+router.post('/logout', authenticate, authController.logout);
+
+// ─── Registry Check ──────────────────────────────────────────────────────────────
+
+// GET /api/auth/registry/:registryId
+// Check if registry ID is valid
+router.get('/registry/:registryId', authController.checkRegistry);
+
+// ─── License Status Check (Protected) ─────────────────────────────────────────────
+
+// GET /api/auth/license-status
+// Check current user's license status
+router.get('/license-status', authenticate, checkLicenseStatus, (req, res) => {
+  res.json({
+    licenseStatus: req.user.licenseStatus,
+    lastLicenseCheck: req.user.lastLicenseCheck,
+    isActive: req.user.isActive,
+  });
 });
 
 module.exports = router;

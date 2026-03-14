@@ -9,6 +9,7 @@ const consultationRoutes = require('./routes/consultations');
 const prescriptionRoutes = require('./routes/prescriptions');
 const labTestRoutes = require('./routes/labtests');
 const auditRoutes = require('./routes/audit');
+const { startLicenseMonitor } = require('./services/licenseMonitor');
 
 const app = express();
 
@@ -35,7 +36,12 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ Connected to MongoDB');
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      
+      // Start license monitoring background job
+      startLicenseMonitor();
+    });
   })
   .catch((err) => {
     console.error('❌ MongoDB connection error:', err.message);
