@@ -20,7 +20,9 @@ export default function NewConsultationPage() {
   const [timer, setTimer] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
-  const [editableJson, setEditableJson] = useState('');
+  const [draftData, setDraftData] = useState(null);
+  const [adviceToPatient, setAdviceToPatient] = useState('');
+  const [translating, setTranslating] = useState(false);
   const mediaRecorder = useRef(null);
   const timerRef = useRef(null);
   const chunks = useRef([]);
@@ -83,8 +85,8 @@ export default function NewConsultationPage() {
         timeout: 120000,
       });
       setResult(data);
-      // Initialize the editable JSON string with the AI's summary
-      setEditableJson(JSON.stringify(data.aiSummary, null, 2));
+      // Initialize the structured draft data
+      setDraftData(data.aiSummary);
       setStep(3);
       toast.success('AI Draft generated successfully!');
     } catch (err) {
@@ -103,7 +105,7 @@ export default function NewConsultationPage() {
         text: textInput,
       }, { timeout: 120000 });
       setResult(data);
-      setEditableJson(JSON.stringify(data.aiSummary, null, 2));
+      setDraftData(data.aiSummary);
       setStep(3);
       toast.success('AI Draft generated successfully!');
     } catch (err) {
@@ -113,37 +115,79 @@ export default function NewConsultationPage() {
     }
   };
 
-  const speakInstructions = () => {
-    if (!result?.aiSummary?.translatedInstructions?.text) {
-      return toast.error('No spoken instructions available');
+  const handleDraftChange = (field, value) => {
+    setDraftData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleListChange = (field, index, value) => {
+    const newList = [...draftData[field]];
+    newList[index] = value;
+    handleDraftChange(field, newList);
+  };
+
+  const addListItem = (field) => {
+    handleDraftChange(field, [...draftData[field], '']);
+  };
+
+  const removeListItem = (field, index) => {
+    handleDraftChange(field, draftData[field].filter((_, i) => i !== index));
+  };
+
+  const handlePrescriptionChange = (index, field, value) => {
+    const newPrescriptions = [...draftData.prescriptions];
+    newPrescriptions[index] = { ...newPrescriptions[index], [field]: value };
+    handleDraftChange('prescriptions', newPrescriptions);
+  };
+
+  const addPrescription = () => {
+    handleDraftChange('prescriptions', [...draftData.prescriptions, { medication: '', dosage: '', frequency: '', duration: '' }]);
+  };
+
+  const handleLabTestChange = (index, field, value) => {
+    const newLabTests = [...draftData.labTests];
+    newLabTests[index] = { ...newLabTests[index], [field]: value };
+    handleDraftChange('labTests', newLabTests);
+  };
+
+  const addLabTest = () => {
+    handleDraftChange('labTests', [...draftData.labTests, { testName: '', instructions: '' }]);
+  };
+
+  const translateAndSpeak = async () => {
+    if (!adviceToPatient.trim()) return toast.error('Please enter advice for the patient');
+    setTranslating(true);
+    try {
+      const { data } = await api.post('/consultations/translate', {
+        text: adviceToPatient,
+        targetLanguage: result.detectedLanguage,
+      });
+
+      const utterance = new SpeechSynthesisUtterance(data.translatedText);
+      utterance.lang = result.aiSummary.translatedInstructions.language || 'en-US';
+      
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0])) || voices[0];
+      if (voice) utterance.voice = voice;
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      toast.success('Advice translated and spoken!');
+    } catch (err) {
+      toast.error('Translation failed');
+    } finally {
+      setTranslating(false);
     }
-
-    const { text, language } = result.aiSummary.translatedInstructions;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language || 'en-US';
-
-    // Try to find a voice that matches the language
-    const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find(v => v.lang.startsWith(language.split('-')[0])) || voices[0];
-    if (voice) utterance.voice = voice;
-
-    window.speechSynthesis.cancel(); // Stop any current speech
-    window.speechSynthesis.speak(utterance);
-    toast.success(`Speaking in ${result.detectedLanguage}...`);
   };
 
   const saveFinalConsultation = async () => {
     setProcessing(true);
     try {
-      // Parse the doctor's edited JSON
-      const finalSummary = JSON.parse(editableJson);
-      
       const payload = {
         patientPid: result.patientPid,
         audioUrl: result.audioUrl,
         transcript: result.transcript,
         detectedLanguage: result.detectedLanguage,
-        aiSummary: finalSummary,
+        aiSummary: draftData,
       };
 
       const { data } = await api.post('/consultations/save', payload);
@@ -299,29 +343,20 @@ export default function NewConsultationPage() {
       )}
 
       {/* Step 3: Review & Edit Draft */}
-      {step === 3 && result && (
+      {step === 3 && result && draftData && (
         <div className="animate-in">
-          <div className="glass-card" style={{ padding: '28px', marginBottom: '20px' }}>
+          <div className="glass-card" style={{ padding: '28px', marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ fontWeight: 600, color: 'var(--accent-warning)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '1.2rem' }}>⚠️</span> Review AI Draft
+                  <span style={{ fontSize: '1.2rem' }}>📋</span> Review AI Draft
                 </h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Please review and edit the structured JSON below before saving permanently.</p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Review and refine the clinical findings before final signature.</p>
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span className="badge badge-ordered">{result.detectedLanguage}</span>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  onClick={speakInstructions}
-                  title="Speak instructions to patient"
-                  style={{ padding: '6px 10px' }}
-                >
-                  <FiVolume2 /> Listen
-                </button>
-              </div>
+              <span className="badge badge-ordered">{result.detectedLanguage}</span>
             </div>
 
+            {/* Original Transcript Section */}
             {result.transcript && (
               <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg-glass)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Original Transcript</div>
@@ -329,21 +364,113 @@ export default function NewConsultationPage() {
               </div>
             )}
 
-            <div className="form-group">
-              <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Editable Clinical Data (JSON Format)</label>
-              <textarea 
-                className="form-textarea" 
-                rows={15}
-                style={{ fontFamily: 'monospace', fontSize: '14px', background: '#0f172a', color: '#f8fafc', borderColor: 'var(--accent-primary)' }}
-                value={editableJson} 
-                onChange={(e) => setEditableJson(e.target.value)} 
-              />
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                * Ensure the format remains valid JSON. Changes here will be permanently saved.
-              </p>
+            {/* Structured Form */}
+            <div style={{ display: 'grid', gap: '24px' }}>
+              
+              {/* Symptoms */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Symptoms</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                  {draftData.symptoms.map((s, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                      <input 
+                        type="text" 
+                        value={s} 
+                        onChange={(e) => handleListChange('symptoms', i, e.target.value)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', outline: 'none', width: '120px' }}
+                      />
+                      <button onClick={() => removeListItem('symptoms', i)} style={{ background: 'transparent', border: 'none', color: 'var(--accent-danger)', cursor: 'pointer', fontSize: '1.1rem' }}>×</button>
+                    </div>
+                  ))}
+                  <button className="btn btn-secondary btn-sm" onClick={() => addListItem('symptoms')}>+ Add</button>
+                </div>
+              </div>
+
+              {/* Diagnosis */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Diagnosis</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={draftData.diagnosis} 
+                  onChange={(e) => handleDraftChange('diagnosis', e.target.value)} 
+                />
+              </div>
+
+              {/* Clinical Notes */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Clinical Notes</label>
+                <textarea 
+                  className="form-textarea" 
+                  rows={4}
+                  value={draftData.clinicalNotes} 
+                  onChange={(e) => handleDraftChange('clinicalNotes', e.target.value)} 
+                />
+              </div>
+
+              {/* Prescriptions */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Prescriptions</label>
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  {draftData.prescriptions.map((p, i) => (
+                    <div key={i} className="glass-card" style={{ padding: '12px', background: 'var(--bg-primary)', position: 'relative' }}>
+                      <button onClick={() => removeListItem('prescriptions', i)} style={{ position: 'absolute', right: '8px', top: '8px', background: 'transparent', border: 'none', color: 'var(--accent-danger)', cursor: 'pointer' }}>Remove</button>
+                      <div className="form-row">
+                        <input className="form-input" placeholder="Medication" value={p.medication} onChange={(e) => handlePrescriptionChange(i, 'medication', e.target.value)} />
+                        <input className="form-input" placeholder="Dosage" value={p.dosage} onChange={(e) => handlePrescriptionChange(i, 'dosage', e.target.value)} />
+                        <input className="form-input" placeholder="Frequency" value={p.frequency} onChange={(e) => handlePrescriptionChange(i, 'frequency', e.target.value)} />
+                        <input className="form-input" placeholder="Duration" value={p.duration} onChange={(e) => handlePrescriptionChange(i, 'duration', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                  <button className="btn btn-secondary btn-sm" onClick={addPrescription}>+ Add Medication</button>
+                </div>
+              </div>
+
+              {/* Lab Tests */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--accent-primary)' }}>Lab Tests</label>
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  {draftData.labTests.map((t, i) => (
+                    <div key={i} className="glass-card" style={{ padding: '12px', background: 'var(--bg-primary)', position: 'relative' }}>
+                      <button onClick={() => removeListItem('labTests', i)} style={{ position: 'absolute', right: '8px', top: '8px', background: 'transparent', border: 'none', color: 'var(--accent-danger)', cursor: 'pointer' }}>Remove</button>
+                      <div className="form-row">
+                        <input className="form-input" placeholder="Test Name" value={t.testName} onChange={(e) => handleLabTestChange(i, 'testName', e.target.value)} />
+                        <input className="form-input" placeholder="Instructions" value={t.instructions} onChange={(e) => handleLabTestChange(i, 'instructions', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                  <button className="btn btn-secondary btn-sm" onClick={addLabTest}>+ Add Lab Test</button>
+                </div>
+              </div>
+
+              {/* Speak to Patient Section */}
+              <div className="glass-card" style={{ padding: '24px', background: 'var(--gradient-card)', border: '1px solid var(--accent-info)' }}>
+                <label className="form-label" style={{ color: 'var(--accent-info)', fontWeight: 700 }}>🗣️ Speak Final Advice to Patient</label>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>Type advice in English. We will translate it to <b>{result.detectedLanguage}</b> and read it aloud.</p>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <textarea 
+                    className="form-textarea" 
+                    placeholder="e.g. Please take these medicines for 5 days and avoid cold drinks."
+                    rows={2}
+                    style={{ flex: 1, minHeight: '60px' }}
+                    value={adviceToPatient}
+                    onChange={(e) => setAdviceToPatient(e.target.value)}
+                  />
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={translateAndSpeak} 
+                    disabled={translating || !adviceToPatient.trim()}
+                    style={{ background: 'var(--accent-info)', alignSelf: 'flex-end', height: '60px', padding: '0 24px' }}
+                  >
+                    {translating ? <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> : <><FiVolume2 /> Translate & Speak</>}
+                  </button>
+                </div>
+              </div>
+
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap' }}>
               <button className="btn btn-success" onClick={saveFinalConsultation} disabled={processing} style={{ flex: 1, minWidth: '200px', justifyContent: 'center' }}>
                 {processing ? 'Saving...' : '💾 Confirm & Save Consultation'}
               </button>

@@ -158,4 +158,28 @@ Respond ONLY with valid JSON in this exact format:
   return parsed;
 }
 
-module.exports = { processConsultationAudio, processConsultationText };
+/**
+ * Translate text into a target language using Gemini.
+ * @param {string} text - English text to translate
+ * @param {string} targetLanguage - Language name or code (e.g. 'Hindi', 'ta-IN')
+ * @returns {Promise<string>} Translated text
+ */
+async function translateText(text, targetLanguage) {
+  if (!text || !targetLanguage) return text;
+  
+  const prompt = `You are a medical translator. Translate the following English medical advice into ${targetLanguage}. 
+Keep the tone professional but empathetic. Respond ONLY with the translated text.
+
+English advice:
+"${text}"`;
+
+  const response = await client.chat.completions.create({
+    model: process.env.AI_MODEL_ID,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.3,
+  });
+
+  return response.choices[0]?.message?.content?.trim() || text;
+}
+
+module.exports = { processConsultationAudio, processConsultationText, translateText };

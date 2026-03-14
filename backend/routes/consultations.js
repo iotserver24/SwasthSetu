@@ -7,9 +7,23 @@ const LabTest = require('../models/LabTest');
 const { authenticate, authorizeRoles } = require('../middleware/auth');
 const { logAudit } = require('../middleware/audit');
 const { uploadToCatbox } = require('../services/catbox');
-const { processConsultationAudio, processConsultationText } = require('../services/gemini');
+const { processConsultationAudio, processConsultationText, translateText } = require('../services/gemini');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// POST /api/consultations/translate
+// Request translation of English advice to a target language
+router.post('/translate', authenticate, authorizeRoles('doctor'), async (req, res) => {
+  try {
+    const { text, targetLanguage } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
+    
+    const translatedText = await translateText(text, targetLanguage);
+    res.json({ translatedText });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Create consultation draft from audio (No DB save)
 router.post('/audio/draft', authenticate, authorizeRoles('doctor'), upload.single('audio'), async (req, res) => {
