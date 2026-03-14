@@ -305,7 +305,7 @@ export default function NewConsultationPage() {
               <textarea 
                 className="form-textarea" 
                 rows={15}
-                style={{ fontFamily: 'monospace', fontSize: '14px', background: '#0f172a', borderColor: 'var(--accent-primary)' }}
+                style={{ fontFamily: 'monospace', fontSize: '14px', background: '#0f172a', color: '#f8fafc', borderColor: 'var(--accent-primary)' }}
                 value={editableJson} 
                 onChange={(e) => setEditableJson(e.target.value)} 
               />
