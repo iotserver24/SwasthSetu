@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { FiMic, FiMicOff, FiSend, FiSearch, FiMessageSquare, FiChevronRight } from 'react-icons/fi';
+import { FiMic, FiMicOff, FiSend, FiSearch, FiMessageSquare, FiChevronRight, FiVolume2 } from 'react-icons/fi';
 
 export default function NewConsultationPage() {
   const { user, loading: authLoading } = useAuth();
@@ -111,6 +111,25 @@ export default function NewConsultationPage() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const speakInstructions = () => {
+    if (!result?.aiSummary?.translatedInstructions?.text) {
+      return toast.error('No spoken instructions available');
+    }
+
+    const { text, language } = result.aiSummary.translatedInstructions;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language || 'en-US';
+
+    // Try to find a voice that matches the language
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find(v => v.lang.startsWith(language.split('-')[0])) || voices[0];
+    if (voice) utterance.voice = voice;
+
+    window.speechSynthesis.cancel(); // Stop any current speech
+    window.speechSynthesis.speak(utterance);
+    toast.success(`Speaking in ${result.detectedLanguage}...`);
   };
 
   const saveFinalConsultation = async () => {
@@ -290,7 +309,17 @@ export default function NewConsultationPage() {
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Please review and edit the structured JSON below before saving permanently.</p>
               </div>
-              <span className="badge badge-ordered">{result.detectedLanguage}</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span className="badge badge-ordered">{result.detectedLanguage}</span>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  onClick={speakInstructions}
+                  title="Speak instructions to patient"
+                  style={{ padding: '6px 10px' }}
+                >
+                  <FiVolume2 /> Listen
+                </button>
+              </div>
             </div>
 
             {result.transcript && (
